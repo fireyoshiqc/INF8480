@@ -46,7 +46,6 @@ public class Client {
 		if (distantServerHostname != null) {
 			distantServerStub = loadServerStub(distantServerHostname);
 			//distantServerStub = loadServerStub("132.207.12.231");
-
 		}
 	}
 
