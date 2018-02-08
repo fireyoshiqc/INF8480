@@ -22,6 +22,9 @@ public class FileServer implements FileServerInterface {
     private final String FSROOT = "filesystem/";
     private TreeSet<String> clientIDs;
     private HashMap<String, String> fileLocks;
+    private Object clientIDLock;
+    private Object fileLocksLock;
+    private Object fileSystemLock;
 
 
     public static void main(String[] args) {
@@ -47,6 +50,9 @@ public class FileServer implements FileServerInterface {
         super();
         clientIDs = new TreeSet<>();
         fileLocks = new HashMap<>();
+        clientIDLock = new Object();
+        fileLocksLock = new Object();
+        fileSystemLock = new Object();
     }
 
     private void run() {
@@ -99,64 +105,90 @@ public class FileServer implements FileServerInterface {
     public String createClientID() throws RemoteException {
         String timeStr = Long.toString(System.nanoTime());
         String id = hashMD5(timeStr);
-        clientIDs.add(id);
+        synchronized (clientIDLock){
+            clientIDs.add(id);
+        }
         return id;
     }
 
     @Override
     public String create(String nom) throws RemoteException {
-
-        File f = new File(FSROOT+nom);
-        try {
-            if(f.createNewFile()) {
-                return nom + " ajouté.";
+        synchronized(fileSystemLock){
+            File f = new File(FSROOT+nom);
+            try {
+                if(f.createNewFile()) {
+                    return nom + " ajouté.";
+                }
+                else {
+                    return nom + " existe déjà!";
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+                return "Une exception est survenue : " + e.getMessage();
             }
-            else {
-                return nom + " existe déjà!";
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-            return "Une exception est survenue : " + e.getMessage();
         }
     }
 
     @Override
     public ArrayList<String> list() throws RemoteException {
         ArrayList<String> fileList = new ArrayList<>();
-        File root = new File(FSROOT);
-        for (File file : root.listFiles()) {
-            String nomFichier = file.getName();
-            String proprietaire = fileLocks.get(nomFichier);
-            fileList.add("* " + file.getName()+ "\t" + (proprietaire == (null) ? "non verrouillé" : "verrouillé par " + proprietaire));
+        synchronized (fileSystemLock) {
+            File root = new File(FSROOT);
+            for (File file : root.listFiles()) {
+                String nomFichier = file.getName();
+                synchronized (fileLocksLock) {
+                    String proprietaire = fileLocks.get(nomFichier);
+                    fileList.add("* " + file.getName() + "\t" + (proprietaire == (null) ? "non verrouillé" : "verrouillé par " + proprietaire));
+                }
+            }
         }
         return fileList;
     }
 
     @Override
-    public void syncLocalDirectory() throws RemoteException {
-
+    public ArrayList<byte[]> syncLocalDirectory() throws RemoteException {
+        synchronized (fileSystemLock) {
+            File f = new File(FSROOT);
+            try {
+                ArrayList<byte[]> files = new ArrayList<>();
+                for (File file : f.listFiles()){
+                    FileInputStream fis = new FileInputStream(file);
+                    byte[] contents = new byte[(int)f.length()];
+                    fis.read(contents);
+                    files.add(contents);
+                }
+                return files;
+            } catch (IOException e) {
+                return null;
+            }
+        }
     }
 
     @Override
     public byte[] get(String nom, String checksum) throws RemoteException {
-        File f = new File(FSROOT + nom);
-        try {
-            FileInputStream fis = new FileInputStream(f);
-            byte[] contents = new byte[(int)f.length()];
-            fis.read(contents);
-            return (checksum == hashMD5(contents)) ? null : contents;
-        } catch (IOException e) {
-            return null;
+        synchronized (fileSystemLock) {
+            File f = new File(FSROOT + nom);
+            try {
+                FileInputStream fis = new FileInputStream(f);
+                byte[] contents = new byte[(int) f.length()];
+                fis.read(contents);
+                fis.close();
+                return (checksum == hashMD5(contents)) ? null : contents;
+            } catch (IOException e) {
+                return null;
+            }
         }
     }
 
     @Override
     public byte[] lock(String nom, String clientid, String checksum) throws RemoteException {
-        String id = fileLocks.putIfAbsent(nom, clientid);
-        if (id == null) {
-            return get(nom, checksum);
+        synchronized (fileLocksLock) {
+            String id = fileLocks.putIfAbsent(nom, clientid);
+            if (id == null) {
+                return get(nom, checksum);
+            }
+            return id.getBytes();
         }
-        return id.getBytes();
     }
 
     @Override
