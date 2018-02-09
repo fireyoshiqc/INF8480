@@ -1,31 +1,33 @@
 package ca.polymtl.inf8480.tp1q2.server;
 
+import ca.polymtl.inf8480.tp1q2.shared.FileServerInterface;
+
 import java.io.*;
-import java.nio.ByteBuffer;
-import java.nio.charset.Charset;
-import java.nio.file.Files;
-import java.nio.file.attribute.UserDefinedFileAttributeView;
 import java.rmi.ConnectException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.TreeSet;
-import java.security.MessageDigest;
-
-import ca.polymtl.inf8480.tp1q2.shared.FileServerInterface;
 
 public class FileServer implements FileServerInterface {
 
     private final String FSROOT = "filesystem/";
-    private final String METADATA = "user:fslock";
+    private final String LOCKFILE = ".locks.dat";
     private HashMap<String, String> fileLocks;
-    private Object fileLocksLock;
-    private Object fileSystemLock;
+    private final Object fileLocksLock;
+    private final Object fileSystemLock;
 
+
+    public FileServer() {
+        super();
+        fileLocks = new HashMap<>();
+        fileLocksLock = new Object();
+        fileSystemLock = new Object();
+    }
 
     public static void main(String[] args) {
         FileServer fs = new FileServer();
@@ -35,16 +37,15 @@ public class FileServer implements FileServerInterface {
             String id = fs.createClientID();
             System.out.println(id);
             System.out.println(fs.create("poopy.txt"));
-            for (String file : fs.list()){
+            for (String file : fs.list()) {
                 System.out.println(file);
             }
             String test = "blabla";
             System.out.println(fs.push("poopy.txt", test.getBytes(), id));
             fs.lock("poopy.txt", id, "");
-            for (String file : fs.list()){
+            for (String file : fs.list()) {
                 System.out.println(file);
             }
-            File f = new File("filesystem/poopy.txt");
             System.out.println(fs.push("poopy.txt", test.getBytes(), id));
             System.out.println("GET:" + new String(fs.get("poopy.txt", null)));
 
@@ -55,18 +56,11 @@ public class FileServer implements FileServerInterface {
 
     }
 
-    public FileServer() {
-        super();
-        fileLocks = new HashMap<>();
-        fileLocksLock = new Object();
-        fileSystemLock = new Object();
-    }
-
     private void run() {
         if (System.getSecurityManager() == null) {
-			System.setSecurityManager(new SecurityManager());
+            System.setSecurityManager(new SecurityManager());
         }
-        
+
         try {
             FileServerInterface stub = (FileServerInterface) UnicastRemoteObject.exportObject(this, 0);
             Registry registry = LocateRegistry.getRegistry();
@@ -83,53 +77,44 @@ public class FileServer implements FileServerInterface {
     private void initializeFileSystem() {
         synchronized (fileSystemLock) {
             File dir = new File(FSROOT);
-            if (!dir.exists()){
+            if (!dir.exists()) {
                 dir.mkdir();
-            /*} else {
-                for (File f : dir.listFiles()) {
-                    // Check file metadata to get back locks here, inspired by : https://docs.oracle.com/javase/tutorial/essential/io/fileAttr.html
-                    String metadata = this.readMetadata(f);
-                    System.out.println("METADATA : " + metadata);
-                    if (metadata != null){
-                        synchronized (fileLocksLock) {
-                            fileLocks.putIfAbsent(f.getName(), metadata);
-                        }
-                    }
-                }*/
+            } else {
+                this.readLocks();
             }
         }
     }
 
-    private String readMetadata(File f) {
-        UserDefinedFileAttributeView view = Files.getFileAttributeView(f.toPath(), UserDefinedFileAttributeView.class);
-        try {
-            //ByteBuffer buf = ByteBuffer.allocate(view.size(METADATA));
-            //view.read(METADATA, buf);
-            //buf.flip();
-            return new String((byte[]) Files.getAttribute(f.toPath(), METADATA));//Charset.defaultCharset().decode(buf).toString();
-        } catch (IOException e) {
-            //e.printStackTrace();
-            System.out.println("Error : Could not read metadata from file : " + f.getName());
-            return null;
+    private void saveLocks() {
+        synchronized (fileSystemLock) {
+            File lockFile = new File(LOCKFILE);
+            try {
+                lockFile.createNewFile();
+                FileOutputStream fos = new FileOutputStream(lockFile);
+                ObjectOutputStream oos = new ObjectOutputStream(fos);
+                oos.writeObject(fileLocks);
+                oos.close();
+                fos.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
 
-    private void addMetadata(File f, String metadata) {
-        //UserDefinedFileAttributeView view = Files.getFileAttributeView(f.toPath(), UserDefinedFileAttributeView.class);
-        try {
-            Files.setAttribute(f.toPath(), METADATA, metadata.getBytes());
-            //view.write(METADATA, Charset.defaultCharset().encode(metadata));
-        } catch (IOException e) {
-            System.out.println("Error : Could not add metadata to file : " + f.getName());
-        }
-    }
-
-    private void removeMetadata(File f) {
-        UserDefinedFileAttributeView view = Files.getFileAttributeView(f.toPath(), UserDefinedFileAttributeView.class);
-        try {
-            view.delete(METADATA);
-        } catch (IOException e) {
-            System.out.println("Error : Could not remove metadata from file : " + f.getName());
+    private void readLocks() {
+        synchronized (fileSystemLock) {
+            File lockFile = new File(LOCKFILE);
+            if (lockFile.exists()) {
+                try {
+                    FileInputStream fis = new FileInputStream(lockFile);
+                    ObjectInputStream ois = new ObjectInputStream(fis);
+                    fileLocks = (HashMap<String, String>) ois.readObject();
+                    ois.close();
+                    fis.close();
+                } catch (ClassNotFoundException | IOException e) {
+                    e.printStackTrace();
+                }
+            }
         }
     }
 
@@ -137,9 +122,9 @@ public class FileServer implements FileServerInterface {
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
             byte[] md5 = md.digest(s.getBytes());
-            StringBuffer sb = new StringBuffer();
-            for (int i = 0; i < md5.length; ++i) {
-                sb.append(Integer.toHexString((md5[i] & 0xFF) | 0x100).substring(1, 3));
+            StringBuilder sb = new StringBuilder();
+            for (byte aMd5 : md5) {
+                sb.append(Integer.toHexString((aMd5 & 0xFF) | 0x100).substring(1, 3));
             }
             return sb.toString();
         } catch (NoSuchAlgorithmException e) {
@@ -151,9 +136,9 @@ public class FileServer implements FileServerInterface {
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
             byte[] md5 = md.digest(barr);
-            StringBuffer sb = new StringBuffer();
-            for (int i = 0; i < md5.length; ++i) {
-                sb.append(Integer.toHexString((md5[i] & 0xFF) | 0x100).substring(1, 3));
+            StringBuilder sb = new StringBuilder();
+            for (byte aMd5 : md5) {
+                sb.append(Integer.toHexString((aMd5 & 0xFF) | 0x100).substring(1, 3));
             }
             return sb.toString();
         } catch (NoSuchAlgorithmException e) {
@@ -164,19 +149,17 @@ public class FileServer implements FileServerInterface {
     @Override
     public String createClientID() throws RemoteException {
         String timeStr = Long.toString(System.nanoTime());
-        String id = hashMD5(timeStr);
-        return id;
+        return hashMD5(timeStr);
     }
 
     @Override
     public String create(String nom) throws RemoteException {
-        synchronized(fileSystemLock){
-            File f = new File(FSROOT+nom);
+        synchronized (fileSystemLock) {
+            File f = new File(FSROOT + nom);
             try {
-                if(f.createNewFile()) {
+                if (f.createNewFile()) {
                     return nom + " ajouté.";
-                }
-                else {
+                } else {
                     return nom + " existe déjà!";
                 }
             } catch (IOException e) {
@@ -191,11 +174,15 @@ public class FileServer implements FileServerInterface {
         ArrayList<String> fileList = new ArrayList<>();
         synchronized (fileSystemLock) {
             File root = new File(FSROOT);
-            for (File file : root.listFiles()) {
-                String nomFichier = file.getName();
-                synchronized (fileLocksLock) {
-                    String proprietaire = fileLocks.get(nomFichier);
-                    fileList.add("* " + file.getName() + "\t" + (proprietaire == (null) ? "non verrouillé" : "verrouillé par " + proprietaire));
+            File[] files = root.listFiles();
+            if (files != null && files.length > 0) {
+                for (File file : files) {
+                    String nomFichier = file.getName();
+                    synchronized (fileLocksLock) {
+                        this.readLocks();
+                        String proprietaire = fileLocks.get(nomFichier);
+                        fileList.add("* " + file.getName() + "\t" + (proprietaire == (null) ? "non verrouillé" : "verrouillé par " + proprietaire));
+                    }
                 }
             }
         }
@@ -207,14 +194,18 @@ public class FileServer implements FileServerInterface {
         synchronized (fileSystemLock) {
             File f = new File(FSROOT);
             try {
-                ArrayList<byte[]> files = new ArrayList<>();
-                for (File file : f.listFiles()){
-                    FileInputStream fis = new FileInputStream(file);
-                    byte[] contents = new byte[(int)f.length()];
-                    fis.read(contents);
-                    files.add(contents);
+                ArrayList<byte[]> fileList = new ArrayList<>();
+                File[] files = f.listFiles();
+                if (files != null && files.length > 0) {
+                    for (File file : files) {
+                        FileInputStream fis = new FileInputStream(file);
+                        byte[] contents = new byte[(int) f.length()];
+                        fis.read(contents);
+                        fileList.add(contents);
+                    }
+                    return fileList;
                 }
-                return files;
+                return fileList;
             } catch (IOException e) {
                 return null;
             }
@@ -230,7 +221,7 @@ public class FileServer implements FileServerInterface {
                 byte[] contents = new byte[(int) f.length()];
                 fis.read(contents);
                 fis.close();
-                return (checksum == hashMD5(contents)) ? null : contents;
+                return (checksum.equals(hashMD5(contents))) ? null : contents;
             } catch (IOException e) {
                 return null;
             }
@@ -240,11 +231,10 @@ public class FileServer implements FileServerInterface {
     @Override
     public byte[] lock(String nom, String clientid, String checksum) throws RemoteException {
         synchronized (fileLocksLock) {
+            this.readLocks();
             String id = fileLocks.putIfAbsent(nom, clientid);
+            this.saveLocks();
             if (id == null) {
-                File f = new File(FSROOT + nom);
-                //this.addMetadata(f, clientid);
-                //System.out.println("METADATA_LOCK : " + this.readMetadata(f));
                 return get(nom, checksum);
             }
             return id.getBytes();
@@ -254,17 +244,15 @@ public class FileServer implements FileServerInterface {
     @Override
     public String push(String nom, byte[] contenu, String clientid) throws RemoteException {
         synchronized (fileLocksLock) {
+            this.readLocks();
             String proprietaire = fileLocks.get(nom);
             if (proprietaire == null) {
                 return "Opération refusée. Vous devez d'abord verrouiller le fichier.";
-            }
-            else if (proprietaire != clientid) {
+            } else if (!proprietaire.equals(clientid)) {
                 return "Ce fichier est verrouillé par un autre utilisateur : " + proprietaire;
-            }
-            else {
+            } else {
                 File f = new File(FSROOT + nom);
                 synchronized (fileSystemLock) {
-
                     try {
                         FileOutputStream fos = new FileOutputStream(f);
                         fos.write(contenu);
@@ -274,8 +262,7 @@ public class FileServer implements FileServerInterface {
                     }
                 }
                 fileLocks.remove(nom);
-                //System.out.println("METADATA_PUSH: " + this.readMetadata(f));
-                //this.removeMetadata(f);
+                this.saveLocks();
                 return nom + " a été envoyé au serveur.";
             }
         }
