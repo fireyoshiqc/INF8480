@@ -1,6 +1,7 @@
 package ca.polymtl.inf8480.tp1q2.server;
 
 import ca.polymtl.inf8480.tp1q2.shared.FileServerInterface;
+import ca.polymtl.inf8480.tp1q2.shared.MD5Hasher;
 
 import java.io.*;
 import java.rmi.ConnectException;
@@ -8,8 +9,6 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -17,9 +16,9 @@ public class FileServer implements FileServerInterface {
 
     private final String FSROOT = "filesystem/";
     private final String LOCKFILE = ".locks.dat";
-    private HashMap<String, String> fileLocks;
     private final Object fileLocksLock;
     private final Object fileSystemLock;
+    private HashMap<String, String> fileLocks;
 
 
     public FileServer() {
@@ -31,8 +30,9 @@ public class FileServer implements FileServerInterface {
 
     public static void main(String[] args) {
         FileServer fs = new FileServer();
-        //fs.run();
         fs.initializeFileSystem();
+        fs.run();
+        /*
         try {
             String id = fs.createClientID();
             System.out.println(id);
@@ -52,7 +52,7 @@ public class FileServer implements FileServerInterface {
 
         } catch (RemoteException e) {
             e.printStackTrace();
-        }
+        }*/
 
     }
 
@@ -118,38 +118,10 @@ public class FileServer implements FileServerInterface {
         }
     }
 
-    private String hashMD5(String s) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            byte[] md5 = md.digest(s.getBytes());
-            StringBuilder sb = new StringBuilder();
-            for (byte aMd5 : md5) {
-                sb.append(Integer.toHexString((aMd5 & 0xFF) | 0x100).substring(1, 3));
-            }
-            return sb.toString();
-        } catch (NoSuchAlgorithmException e) {
-            return "";
-        }
-    }
-
-    private String hashMD5(byte[] barr) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            byte[] md5 = md.digest(barr);
-            StringBuilder sb = new StringBuilder();
-            for (byte aMd5 : md5) {
-                sb.append(Integer.toHexString((aMd5 & 0xFF) | 0x100).substring(1, 3));
-            }
-            return sb.toString();
-        } catch (NoSuchAlgorithmException e) {
-            return "";
-        }
-    }
-
     @Override
     public String createClientID() throws RemoteException {
         String timeStr = Long.toString(System.nanoTime());
-        return hashMD5(timeStr);
+        return MD5Hasher.hashMD5(timeStr);
     }
 
     @Override
@@ -190,18 +162,18 @@ public class FileServer implements FileServerInterface {
     }
 
     @Override
-    public ArrayList<byte[]> syncLocalDirectory() throws RemoteException {
+    public HashMap<String, byte[]> syncLocalDirectory() throws RemoteException {
         synchronized (fileSystemLock) {
             File f = new File(FSROOT);
             try {
-                ArrayList<byte[]> fileList = new ArrayList<>();
+                HashMap<String, byte[]> fileList = new HashMap<>();
                 File[] files = f.listFiles();
                 if (files != null && files.length > 0) {
                     for (File file : files) {
                         FileInputStream fis = new FileInputStream(file);
                         byte[] contents = new byte[(int) f.length()];
                         fis.read(contents);
-                        fileList.add(contents);
+                        fileList.putIfAbsent(f.getName(), contents);
                     }
                     return fileList;
                 }
@@ -221,7 +193,7 @@ public class FileServer implements FileServerInterface {
                 byte[] contents = new byte[(int) f.length()];
                 fis.read(contents);
                 fis.close();
-                return (checksum.equals(hashMD5(contents))) ? null : contents;
+                return (checksum != null && checksum.equals(MD5Hasher.hashMD5(contents))) ? null : contents;
             } catch (IOException e) {
                 return null;
             }
