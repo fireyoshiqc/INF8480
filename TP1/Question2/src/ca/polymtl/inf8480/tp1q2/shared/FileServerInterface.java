@@ -12,5 +12,5 @@ public interface FileServerInterface extends Remote {
     ArrayList<byte[]> syncLocalDirectory() throws RemoteException;
     byte[] get(String nom, String checksum) throws RemoteException;
     byte[] lock(String nom, String clientid, String checksum) throws RemoteException;
-    void push(String nom, /*File*/ String contenu, String clientid) throws RemoteException;
+    String push(String nom, byte[] contenu, String clientid) throws RemoteException;
 }

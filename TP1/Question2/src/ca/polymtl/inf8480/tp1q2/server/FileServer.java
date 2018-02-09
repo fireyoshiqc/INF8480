@@ -1,9 +1,6 @@
 package ca.polymtl.inf8480.tp1q2.server;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
+import java.io.*;
 import java.rmi.ConnectException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
@@ -20,9 +17,9 @@ import ca.polymtl.inf8480.tp1q2.shared.FileServerInterface;
 public class FileServer implements FileServerInterface {
 
     private final String FSROOT = "filesystem/";
-    private TreeSet<String> clientIDs;
+    //private TreeSet<String> clientIDs;
     private HashMap<String, String> fileLocks;
-    private Object clientIDLock;
+    //private Object clientIDLock;
     private Object fileLocksLock;
     private Object fileSystemLock;
 
@@ -31,15 +28,22 @@ public class FileServer implements FileServerInterface {
         FileServer fs = new FileServer();
         //fs.run();
         try {
-            System.out.println(fs.createClientID());
+            String id = fs.createClientID();
+            System.out.println(id);
             System.out.println(fs.create("poopy.txt"));
             for (String file : fs.list()){
                 System.out.println(file);
             }
-            fs.lock("poopy.txt", "1234", "");
+            String test = "blabla";
+            System.out.println(fs.push("poopy.txt", test.getBytes(), id));
+            fs.lock("poopy.txt", id, "");
             for (String file : fs.list()){
                 System.out.println(file);
             }
+            System.out.println(fs.push("poopy.txt", test.getBytes(), id));
+            System.out.println("GET:" + new String(fs.get("poopy.txt", null)));
+
+
         } catch (RemoteException e) {
             e.printStackTrace();
         }
@@ -48,9 +52,9 @@ public class FileServer implements FileServerInterface {
 
     public FileServer() {
         super();
-        clientIDs = new TreeSet<>();
+        //clientIDs = new TreeSet<>();
         fileLocks = new HashMap<>();
-        clientIDLock = new Object();
+        //clientIDLock = new Object();
         fileLocksLock = new Object();
         fileSystemLock = new Object();
     }
@@ -105,9 +109,9 @@ public class FileServer implements FileServerInterface {
     public String createClientID() throws RemoteException {
         String timeStr = Long.toString(System.nanoTime());
         String id = hashMD5(timeStr);
-        synchronized (clientIDLock){
-            clientIDs.add(id);
-        }
+        //synchronized (clientIDLock){
+        //    clientIDs.add(id);
+        //}
         return id;
     }
 
@@ -192,9 +196,30 @@ public class FileServer implements FileServerInterface {
     }
 
     @Override
-    public void push(String nom, String contenu, String clientid) throws RemoteException {
-
+    public String push(String nom, byte[] contenu, String clientid) throws RemoteException {
+        synchronized (fileLocksLock) {
+            String proprietaire = fileLocks.get(nom);
+            if (proprietaire == null) {
+                return "Vous devez verrouiller ce fichier avant de pouvoir le modifier. Utilisez la méthode lock().";
+            }
+            else if (proprietaire != clientid) {
+                return "Ce fichier est verrouillé par un autre utilisateur : " + proprietaire;
+            }
+            else {
+                synchronized (fileSystemLock) {
+                    File f = new File(FSROOT + nom);
+                    try {
+                        FileOutputStream fos = new FileOutputStream(f);
+                        fos.write(contenu);
+                        fos.close();
+                    } catch (IOException e) {
+                        return "Une erreur est survenue lors de l'écriture dans le fichier. Celui-ci est toujours verrouillé.";
+                    }
+                }
+                fileLocks.remove(nom);
+                return "Succès de l'opération. Le fichier a été mis à jour, et le verrou retiré.";
+            }
+        }
     }
-
 }
 
