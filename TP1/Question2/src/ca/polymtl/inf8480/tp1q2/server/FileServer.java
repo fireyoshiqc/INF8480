@@ -170,10 +170,12 @@ public class FileServer implements FileServerInterface {
                 File[] files = f.listFiles();
                 if (files != null && files.length > 0) {
                     for (File file : files) {
-                        FileInputStream fis = new FileInputStream(file);
-                        byte[] contents = new byte[(int) f.length()];
-                        fis.read(contents);
-                        fileList.putIfAbsent(f.getName(), contents);
+                        if (!file.isDirectory()) {
+                            FileInputStream fis = new FileInputStream(file);
+                            byte[] contents = new byte[(int) file.length()];
+                            fis.read(contents);
+                            fileList.putIfAbsent(file.getName(), contents);
+                        }
                     }
                     return fileList;
                 }

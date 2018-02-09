@@ -37,6 +37,7 @@ public class FileClient {
         FileClient fc = new FileClient();
 
         if (args.length > 0) {
+            fc.initializeFileSystem();
             fc.createClientID();
             String command = args[0].toLowerCase();
             try {
@@ -106,6 +107,13 @@ public class FileClient {
         return null;
     }
 
+    private void initializeFileSystem() {
+        File dir = new File(FSROOT);
+        if (!dir.exists()) {
+            dir.mkdir();
+        }
+    }
+
     private void createClientID() {
         File f = new File(CLIENTID_FILE);
         try {
@@ -150,7 +158,11 @@ public class FileClient {
                 files.forEach((name, contents) -> {
                     File f = new File(FSROOT + name);
                     try {
-                        f.createNewFile();
+                        if(f.createNewFile()) {
+                            System.out.println(f.getName() + " ajouté.");
+                        } else {
+                            System.out.println(f.getName() + " synchronisé.");
+                        }
                         FileOutputStream fos = new FileOutputStream(f);
                         fos.write(contents);
                         fos.close();
@@ -170,6 +182,7 @@ public class FileClient {
         try {
             result = distantServerStub.get(filename, this.generateFileChecksum(filename));
             if (result != null) {
+                f.createNewFile();
                 FileOutputStream fos = new FileOutputStream(f);
                 fos.write(result);
                 fos.close();
@@ -185,19 +198,30 @@ public class FileClient {
     private void lock(String filename) {
         try {
             byte[] result = distantServerStub.lock(filename, clientID, this.generateFileChecksum(filename));
-            if (result.length == 32) {
-                System.out.println(filename + " est déjà verrouillé par " + new String(result));
-            } else {
-                try {
-                    File f = new File(FSROOT + filename);
-                    FileOutputStream fos = new FileOutputStream(f);
-                    fos.write(result);
-                    fos.close();
-                    System.out.println(filename + " verrouillé");
-                } catch (IOException e) {
-                    System.out.println("Erreur: " + e.getMessage());
+            if (result != null) {
+                if (result.length == 32) {
+                    String lockID = new String(result);
+                    if (lockID.equals(clientID)) {
+                        System.out.println(filename + " est déjà verrouillé par vous!");
+                    } else {
+                        System.out.println(filename + " est déjà verrouillé par " + new String(result));
+                    }
+                } else {
+                    try {
+                        File f = new File(FSROOT + filename);
+                        f.createNewFile();
+                        FileOutputStream fos = new FileOutputStream(f);
+                        fos.write(result);
+                        fos.close();
+                        System.out.println(filename + " synchronisé et verrouillé.");
+                    } catch (IOException e) {
+                        System.out.println("Erreur: " + e.getMessage());
+                    }
                 }
+            } else {
+                System.out.println(filename + " verrouillé. Il est identique à votre version locale.");
             }
+
         } catch (RemoteException e) {
             System.out.println("Erreur: " + e.getMessage());
         }
