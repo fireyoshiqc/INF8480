@@ -7,6 +7,6 @@ popd > /dev/null
 
 java -cp "$basepath"/server.jar:"$basepath"/shared.jar \
   -Djava.rmi.server.codebase=file:"$basepath"/shared.jar \
-  -Djava.rmi.server.hostname=127.0.0.1 \
+  -Djava.rmi.server.hostname=132.207.12.231 \
   -Djava.security.policy="$basepath"/policy \
   ca.polymtl.inf8480.tp1q2.server.FileServer

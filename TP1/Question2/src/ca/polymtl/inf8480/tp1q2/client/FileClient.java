@@ -16,7 +16,7 @@ import java.util.HashMap;
 
 public class FileClient {
 
-    private static final String DISTANT_HOSTNAME = "127.0.0.1";//"132.207.12.231";
+    private static final String DISTANT_HOSTNAME = "132.207.12.231";
     private final String FSROOT = "clientfiles/";
     private final String CLIENTID_FILE = ".client.id";
     private FileServerInterface distantServerStub;
@@ -60,7 +60,7 @@ public class FileClient {
                     case "push":
                         fc.push(args[1]);
                         break;
-                    case "default":
+                    default:
                         System.out.println("Opération '" + command + "' invalide.\n" +
                                 "Les opérations valides sont: create, list, syncLocalDirectory, get, lock, push.");
                         break;
@@ -69,7 +69,8 @@ public class FileClient {
                 System.out.println("La commande '" + command + "' nécessite un nom de fichier comme second argument!");
             }
         } else {
-
+            System.out.println("Vous devez ajouter un argument pour spécifier la commande à utiliser.\n" +
+                    "Les opérations valides sont: create, list, syncLocalDirectory, get, lock, push.");
         }
     }
 

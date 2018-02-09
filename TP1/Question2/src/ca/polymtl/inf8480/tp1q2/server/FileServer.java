@@ -32,28 +32,6 @@ public class FileServer implements FileServerInterface {
         FileServer fs = new FileServer();
         fs.initializeFileSystem();
         fs.run();
-        /*
-        try {
-            String id = fs.createClientID();
-            System.out.println(id);
-            System.out.println(fs.create("poopy.txt"));
-            for (String file : fs.list()) {
-                System.out.println(file);
-            }
-            String test = "blabla";
-            System.out.println(fs.push("poopy.txt", test.getBytes(), id));
-            fs.lock("poopy.txt", id, "");
-            for (String file : fs.list()) {
-                System.out.println(file);
-            }
-            System.out.println(fs.push("poopy.txt", test.getBytes(), id));
-            System.out.println("GET:" + new String(fs.get("poopy.txt", null)));
-
-
-        } catch (RemoteException e) {
-            e.printStackTrace();
-        }*/
-
     }
 
     private void run() {
@@ -101,6 +79,7 @@ public class FileServer implements FileServerInterface {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void readLocks() {
         synchronized (fileSystemLock) {
             File lockFile = new File(LOCKFILE);
@@ -151,7 +130,6 @@ public class FileServer implements FileServerInterface {
                 for (File file : files) {
                     String nomFichier = file.getName();
                     synchronized (fileLocksLock) {
-                        this.readLocks();
                         String proprietaire = fileLocks.get(nomFichier);
                         fileList.add("* " + file.getName() + "\t" + (proprietaire == (null) ? "non verrouillé" : "verrouillé par " + proprietaire));
                     }
@@ -205,7 +183,6 @@ public class FileServer implements FileServerInterface {
     @Override
     public byte[] lock(String nom, String clientid, String checksum) throws RemoteException {
         synchronized (fileLocksLock) {
-            this.readLocks();
             String id = fileLocks.putIfAbsent(nom, clientid);
             this.saveLocks();
             if (id == null) {
