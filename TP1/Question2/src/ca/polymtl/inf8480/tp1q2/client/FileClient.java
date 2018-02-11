@@ -14,6 +14,10 @@ import java.rmi.registry.Registry;
 import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 
+/**
+ * Classe principale du client. Celui-ci, par défaut, stocke les fichiers locaux dans le répertoire "clientfiles".
+ * Il enregistre également l'identifiant du client dans un fichier caché ".client.id".
+ */
 public class FileClient {
 
     private static final String DISTANT_HOSTNAME = "132.207.12.231";
@@ -22,6 +26,10 @@ public class FileClient {
     private FileServerInterface distantServerStub;
     private String clientID;
 
+    /**
+     * Constructeur public du client, se chargeant de configurer les mécanismes de sécurité RMI et d'obtenir le
+     * "stub" du serveur de fichiers pour les appels RMI.
+     */
     public FileClient() {
 
         if (System.getSecurityManager() == null) {
@@ -32,6 +40,13 @@ public class FileClient {
 
     }
 
+    /**
+     * Fonction main du client. Est exécutée lors de l'appel à ./client.
+     * @param args Les paramètres de la ligne de commande.
+     *             Certaines commandes (list, syncLocalDirectory) ne prennent pas d'argument supplémentaire,
+     *             alors que toutes les autres (create, get, lock, push) prennent également le nom du fichier comme
+     *             second argument.
+     */
     public static void main(String[] args) {
 
         FileClient fc = new FileClient();
@@ -74,6 +89,11 @@ public class FileClient {
         }
     }
 
+    /**
+     * Fonction pour obtenir le "stub" RMI du serveur de fichiers.
+     * @param hostname L'adresse IP du serveur distant.
+     * @return Le "stub" RMI du serveur de fichiers.
+     */
     private FileServerInterface loadServerStub(String hostname) {
         FileServerInterface stub = null;
 
@@ -90,6 +110,11 @@ public class FileClient {
         return stub;
     }
 
+    /**
+     * Fonction permettant de générer la somme de hachage MD5 d'un fichier local.
+     * @param filename Le nom du fichier dont on veut obtenir la somme de hachage.
+     * @return La somme de hachage MD5 du contenu du fichier, sous forme de String.
+     */
     private String generateFileChecksum(String filename) {
         File f = new File(FSROOT + filename);
         try {
@@ -108,6 +133,10 @@ public class FileClient {
         return null;
     }
 
+    /**
+     * Fonction d'initialisation du système de fichiers du client. Se charge de créer le dossier "clientfiles"
+     * si celui-ci n'existe pas déjà.
+     */
     private void initializeFileSystem() {
         File dir = new File(FSROOT);
         if (!dir.exists()) {
@@ -115,6 +144,10 @@ public class FileClient {
         }
     }
 
+    /**
+     * Méthode permettant d'obtenir un identifiant pour le client, si celui-ci n'en a pas déjà un stocké dans le
+     * fichier ".client.id". Fait appel à la méthode RMI du même nom.
+     */
     private void createClientID() {
         File f = new File(CLIENTID_FILE);
         try {
@@ -134,6 +167,10 @@ public class FileClient {
         }
     }
 
+    /**
+     * Méthode faisant appel à la méthode RMI du même nom, permettant de créer un fichier sur le serveur de fichiers.
+     * @param filename Le nom du fichier à créer.
+     */
     private void create(String filename) {
         try {
             System.out.println(distantServerStub.create(filename));
@@ -142,6 +179,10 @@ public class FileClient {
         }
     }
 
+    /**
+     * Méthode faisant appel à la méthode RMI du même nom, permettant de lister les fichiers sur le serveur de fichiers,
+     * ainsi que leur état de verrouillage.
+     */
     private void list() {
         try {
             for (String file : distantServerStub.list()) {
@@ -152,6 +193,11 @@ public class FileClient {
         }
     }
 
+    /**
+     * Méthode faisant appel à la méthode RMI du même nom, permettant de synchroniser les fichiers locaux avec ceux
+     * du serveur de fichiers. Cette méthode se charge de créer les fichiers manquants, et écrasera les fichiers
+     * existants avec les versions obtenues du serveur, qu'elles soient nouvelles ou non.
+     */
     private void syncLocalDirectory() {
         try {
             HashMap<String, byte[]> files = distantServerStub.syncLocalDirectory();
@@ -177,6 +223,14 @@ public class FileClient {
         }
     }
 
+    /**
+     * Méthode faisant appel à la méthode RMI du même nom, permettant d'obtenir un fichier à partir du serveur
+     * de fichiers. Cette méthode génère implicitement une somme de hachage MD5 de la version locale du fichier,
+     * utilisée comme somme de contrôle, afin de permettre au serveur de déterminer s'il est nécessaire d'envoyer
+     * une nouvelle version. À noter qu'une somme de hachage nulle (fichier inexistant par exemple) entraînera
+     * un téléchargement forcé du fichier distant.
+     * @param filename Le nom du fichier à obtenir.
+     */
     private void get(String filename) {
         File f = new File(FSROOT + filename);
         byte[] result = null;
@@ -196,6 +250,12 @@ public class FileClient {
         }
     }
 
+    /**
+     * Méthode faisant appel à la méthode RMI du même nom, permettant de verrouiller un fichier pour modification
+     * sur le serveur de fichiers. Cette méthode fait un certain traitement local pour déterminer si la réponse
+     * du serveur est un fichier ou un identifiant de verrou, dans le cas où le fichier serait déjà verrouillé.
+     * @param filename Le nom du fichier à verrouiller.
+     */
     private void lock(String filename) {
         try {
             byte[] result = distantServerStub.lock(filename, clientID, this.generateFileChecksum(filename));
@@ -228,6 +288,12 @@ public class FileClient {
         }
     }
 
+    /**
+     * Méthode faisant appel à la méthode RMI du même nom, permettant de mettre à jour un fichier sur le serveur
+     * avec la version locale du client. La méthode échouera si un verrou n'est pas obtenu au préalable sur le fichier
+     * en effectuant un appel à lock(), de même que si le fichier n'existe pas localement.
+     * @param filename Le nom du fichier à mettre à jour.
+     */
     private void push(String filename) {
         File f = new File(FSROOT + filename);
         try {

@@ -12,6 +12,10 @@ import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
 import java.util.HashMap;
 
+/**
+ * Classe principale du serveur de fichiers. Celui-ci, par défaut, stocke les fichiers distants dans le répertoire "filesystem".
+ * Il enregistre également la table de hachage pour les verrous de fichier dans un fichier de métadonnées caché ".locks.dat".
+ */
 public class FileServer implements FileServerInterface {
 
     private final String FSROOT = "filesystem/";
@@ -21,6 +25,11 @@ public class FileServer implements FileServerInterface {
     private HashMap<String, String> fileLocks;
 
 
+    /**
+     * Constructeur public du serveur. Instancie la table de hachage pour les verrous de fichier, ainsi que
+     * des verrous de synchronisation utilisés dans les blocs "synchronized" afin d'éviter des disparités entre
+     * les exécutions des clients.
+     */
     public FileServer() {
         super();
         fileLocks = new HashMap<>();
@@ -28,12 +37,19 @@ public class FileServer implements FileServerInterface {
         fileSystemLock = new Object();
     }
 
+    /**
+     * Fonction main du serveur. Est exécutée lors de l'appel à ./server
+     * @param args - Arguments de ligne de commande
+     */
     public static void main(String[] args) {
         FileServer fs = new FileServer();
         fs.initializeFileSystem();
         fs.run();
     }
 
+    /**
+     * Méthode de configuration du serveur. Doit être exécutée pour permettre le RMI.
+     */
     private void run() {
         if (System.getSecurityManager() == null) {
             System.setSecurityManager(new SecurityManager());
@@ -52,6 +68,9 @@ public class FileServer implements FileServerInterface {
         }
     }
 
+    /**
+     * Méthode d'initialisation du système de fichiers associé au serveur.
+     */
     private void initializeFileSystem() {
         synchronized (fileSystemLock) {
             File dir = new File(FSROOT);
@@ -63,6 +82,10 @@ public class FileServer implements FileServerInterface {
         }
     }
 
+    /**
+     * Méthode de sauvegarde de la table de hachage des verrous sur les fichiers.
+     * Est appelée lors d'un appel à lock ou push, entre autres.
+     */
     private void saveLocks() {
         synchronized (fileSystemLock) {
             File lockFile = new File(LOCKFILE);
@@ -79,6 +102,10 @@ public class FileServer implements FileServerInterface {
         }
     }
 
+    /**
+     * Méthode de lecture de la table de hachage des verrous sur les fichiers.
+     * Est appelée lorsque la table doit être vérifiée (presque tous les appels de fonction).
+     */
     @SuppressWarnings("unchecked")
     private void readLocks() {
         synchronized (fileSystemLock) {
@@ -97,12 +124,23 @@ public class FileServer implements FileServerInterface {
         }
     }
 
+    /**
+     * Fonction de création d'un identifiant client.
+     * @return Un hash MD5 du temps système servant d'identifiant au client qui en fait la demande.
+     * @throws RemoteException - Peut être exécutée en RMI.
+     */
     @Override
     public String createClientID() throws RemoteException {
         String timeStr = Long.toString(System.nanoTime());
         return MD5Hasher.hashMD5(timeStr);
     }
 
+    /**
+     * Fonction de création d'un fichier sur le serveur.
+     * @param nom - Le nom du fichier à créer.
+     * @return Une String décrivant le résultat de l'exécution de la fonction.
+     * @throws RemoteException - Peut être exécutée en RMI.
+     */
     @Override
     public String create(String nom) throws RemoteException {
         synchronized (fileSystemLock) {
@@ -114,12 +152,16 @@ public class FileServer implements FileServerInterface {
                     return nom + " existe déjà!";
                 }
             } catch (IOException e) {
-                e.printStackTrace();
                 return "Une exception est survenue : " + e.getMessage();
             }
         }
     }
 
+    /**
+     * Méthode pour lister les fichiers présents sur le serveur.
+     * @return Une liste des fichiers présents sur le serveur, ainsi que leur état de verrouillage.
+     * @throws RemoteException - Peut être exécutée en RMI.
+     */
     @Override
     public ArrayList<String> list() throws RemoteException {
         ArrayList<String> fileList = new ArrayList<>();
@@ -139,6 +181,12 @@ public class FileServer implements FileServerInterface {
         return fileList;
     }
 
+    /**
+     * Fonction pour synchroniser le client avec les fichiers du serveur.
+     * @return Une table de hachage contenant des paires clé-valeur où la clé est le nom du fichier, et la valeur
+     * est son contenu. Une table vide est retournée s'il n'y a pas de fichiers sur le serveur.
+     * @throws RemoteException - Peut être exécutée en RMI.
+     */
     @Override
     public HashMap<String, byte[]> syncLocalDirectory() throws RemoteException {
         synchronized (fileSystemLock) {
@@ -164,6 +212,16 @@ public class FileServer implements FileServerInterface {
         }
     }
 
+    /**
+     * Fonction pour obtenir un fichier se trouvant sur le serveur. Cette fonction vérifie s'il est nécessaire
+     * d'envoyer le fichier en comparant la somme de hachage MD5 de celui-ci à une somme fournie par le client.
+     * @param nom Le nom du fichier à obtenir.
+     * @param checksum La somme de hachage dudit fichier, provenant de la version du client.
+     * @return Le contenu du fichier sous forme de tableau de bytes, si la somme de hachage du fichier sur
+     * le serveur est différente de celle fournie à la fonction, ou si cette dernière est null. Sinon, null
+     * (cela sera interprété côté client comme quoi le fichier est déjà à jour).
+     * @throws RemoteException - Peut être exécutée en RMI.
+     */
     @Override
     public byte[] get(String nom, String checksum) throws RemoteException {
         synchronized (fileSystemLock) {
@@ -180,6 +238,17 @@ public class FileServer implements FileServerInterface {
         }
     }
 
+    /**
+     * Méthode permettant de verrouiller un fichier sur le serveur pour modification.
+     * Le fichier ne sera verrouillé que s'il n'est pas déjà verrouillé par un autre client ou par le client lui-même.
+     * @param nom Le nom du fichier à verrouiller.
+     * @param clientid L'identifiant du client désirant verrouiller ledit fichier.
+     * @param checksum La somme de contrôle de la version du fichier possédée par le client.
+     *                 En effet, cette fonction effectue également un get() si nécessaire.
+     * @return L'identifiant du client possédant le verrou sur le fichier, s'il y en a un, sinon le contenu du fichier.
+     * Tous deux sont sous forme de tableau de bytes, et seront interprétés différemment côté client.
+     * @throws RemoteException - Peut être exécutée en RMI.
+     */
     @Override
     public byte[] lock(String nom, String clientid, String checksum) throws RemoteException {
         synchronized (fileLocksLock) {
@@ -192,6 +261,16 @@ public class FileServer implements FileServerInterface {
         }
     }
 
+    /**
+     * Méthode permettant de mettre à jour un fichier sur le serveur avec une version obtenue du client.
+     * Le client doit auparavant verrouiller le fichier en utilisant la méthode lock().
+     * @param nom Le nom du fichier à mettre à jour.
+     * @param contenu Le contenu (tableau de bytes) du fichier en question.
+     * @param clientid L'identifiant du client désirant procéder à cette mise à jour, afin de vérifier s'il possède
+     *                 un verrou sur le fichier en question.
+     * @return Une String décrivant le résultat de l'exécution de la fonction.
+     * @throws RemoteException - Peut être exécutée en RMI.
+     */
     @Override
     public String push(String nom, byte[] contenu, String clientid) throws RemoteException {
         synchronized (fileLocksLock) {
