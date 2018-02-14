@@ -1,3 +1,6 @@
 # Ignore IntelliJ files
 .idea/
 build/
+
+# Ignore key files
+*.key
