@@ -1,3 +1,5 @@
+package ca.polymtl.inf8480.calculs.computeserver;
+
 /**
  * Methodes utilitaires pour effectuer les operations du TP2.
  * 
