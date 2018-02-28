@@ -3,7 +3,6 @@
 	<property name="debuglevel" value="source,lines,vars" />
 	<path id="TP2.classpath">
 		<pathelement location="bin" />
-		<pathelement path="lib/commons-cli-1.4.jar" />
 	</path>
 	<target name="init">
 		<mkdir dir="bin" />

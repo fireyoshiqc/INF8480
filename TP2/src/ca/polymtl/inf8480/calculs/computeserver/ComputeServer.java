@@ -2,7 +2,6 @@ package ca.polymtl.inf8480.calculs.computeserver;
 
 import ca.polymtl.inf8480.calculs.shared.ComputeServerInterface;
 import ca.polymtl.inf8480.calculs.shared.OperationPair;
-import org.apache.commons.cli.*;
 
 import java.rmi.ConnectException;
 import java.rmi.Remote;
@@ -10,7 +9,9 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
+import java.text.NumberFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Random;
 
 import static java.lang.System.exit;
@@ -23,47 +24,51 @@ public class ComputeServer implements ComputeServerInterface {
 
     public static void main(String args[]) {
 
-        Options options = new Options();
-
-        Option capacity = new Option("q", "capacity", true, "compute server capacity");
-        capacity.setRequired(true);
-        options.addOption(capacity);
-
-        Option maliciousness = new Option("m", "maliciousness", true, "server maliciousness");
-        maliciousness.setRequired(false);
-        options.addOption(maliciousness);
-
-        CommandLineParser parser = new DefaultParser();
-        HelpFormatter formatter = new HelpFormatter();
-        CommandLine cmd = null;
-
-        try {
-            cmd = parser.parse(options, args);
-        } catch (ParseException e) {
-            System.out.println(e.getMessage());
-            formatter.printHelp("utility-name", options);
+        ArrayList<String> arguments = new ArrayList<>(Arrays.asList(args));
+        int posQ = arguments.lastIndexOf("-q");
+        if (posQ == -1) {
+            System.out.println("L'option -q est requise afin de spécifier la capacité du serveur.");
+            System.out.println("Usage :\n-q <int>\t: Capacité du serveur.\n-m <float>\t: Niveau de maliciosité du serveur, 0.0-1.0 (facultatif).");
             exit(1);
         }
+        String capacityArg = arguments.get(posQ + 1);
+        String maliciousnessArg = "";
 
-        String capacityArg = cmd.getOptionValue("capacity");
-        String maliciousnessArg = cmd.getOptionValue("maliciousness", "0");
-
-        try {
-            int capacityNum = Integer.parseInt(capacityArg);
-            float maliciousnessNum = Float.parseFloat(maliciousnessArg);
-            if (capacityNum < 1) {
-                throw new NumberFormatException("La capacité doit être plus grande que 0");
+        int posM = arguments.lastIndexOf("-m");
+        if (posM != -1) {
+            maliciousnessArg = arguments.get(posM + 1);
+            try {
+                int capacityNum = Integer.parseInt(capacityArg);
+                float maliciousnessNum = Float.parseFloat(maliciousnessArg);
+                if (capacityNum < 1) {
+                    throw new NumberFormatException("La capacité doit être plus grande que 0.");
+                }
+                if (maliciousnessNum < 0.0f || maliciousnessNum > 1.0f) {
+                    throw new NumberFormatException("Le niveau de maliciosité du serveur doit être au moins 0.0, et pas plus grand que 1.0.");
+                }
+                ComputeServer cs = new ComputeServer(capacityNum, maliciousnessNum);
+                cs.run();
+            } catch (NumberFormatException e) {
+                System.out.println(e.getMessage());
+                System.out.println("Usage :\n-q <int>\t: Capacité du serveur.\n-m <float>\t: Niveau de maliciosité du serveur 0.0-1.0 (facultatif).");
+                exit(1);
             }
-            if (maliciousnessNum < 0.0f || maliciousnessNum > 1.0f) {
-                throw new NumberFormatException("Le niveau de maliciosité du serveur doit être au moins 0.0, et pas plus grand que 1.0.");
+        } else {
+            try {
+                int capacityNum = Integer.parseInt(capacityArg);
+                if (capacityNum < 1) {
+                    throw new NumberFormatException("La capacité doit être plus grande que 0.");
+                }
+                ComputeServer cs = new ComputeServer(capacityNum, 0.0f);
+                cs.run();
+            } catch (NumberFormatException e) {
+                System.out.println(e.getMessage());
+                System.out.println("Usage :\n-q <int>\t: Capacité du serveur.\n-m <float>\t: Niveau de maliciosité du serveur 0.0-1.0 (facultatif).");
+                exit(1);
             }
-            ComputeServer cs = new ComputeServer(capacityNum, maliciousnessNum);
-            cs.run();
-        } catch (NumberFormatException e) {
-            System.out.println(e.getMessage());
-            formatter.printHelp("utility-name", options);
-            exit(1);
         }
+
+
     }
 
     public ComputeServer(int capacity, float maliciousness) {
@@ -78,8 +83,8 @@ public class ComputeServer implements ComputeServerInterface {
         }
 
         try {
-            ComputeServerInterface stub = (ComputeServerInterface) UnicastRemoteObject.exportObject(this, 0);
-            Registry registry = LocateRegistry.getRegistry();
+            ComputeServerInterface stub = (ComputeServerInterface) UnicastRemoteObject.exportObject(this, 5049);
+            Registry registry = LocateRegistry.getRegistry(5050);
             registry.rebind("cs", stub);
             System.out.println("Compute server ready.");
         } catch (ConnectException e) {
@@ -90,6 +95,7 @@ public class ComputeServer implements ComputeServerInterface {
         }
     }
 
+    @Override
     public int calculate(ArrayList<OperationPair> ops) throws RemoteException {
         // Capacity refusal
         float refusalRate = (ops.size() - capacity)/(5*capacity);
@@ -117,6 +123,7 @@ public class ComputeServer implements ComputeServerInterface {
         return sum;
     }
 
+    @Override
     public int getCapacity() throws RemoteException {
         return this.capacity;
     }
