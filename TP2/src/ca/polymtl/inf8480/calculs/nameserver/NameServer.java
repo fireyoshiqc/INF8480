@@ -52,24 +52,6 @@ public class NameServer implements NameServerInterface {
             NameServerInterface stub = (NameServerInterface) UnicastRemoteObject.exportObject(this, 5048);
             Registry registry = LocateRegistry.getRegistry(5050);
             registry.rebind("ns", stub);
-            RMISocketFactory.setSocketFactory( new RMISocketFactory()
-            {
-                public Socket createSocket( String host, int port )
-                        throws IOException
-                {
-                    Socket socket = new Socket();
-                    socket.setSoTimeout( 500 );
-                    socket.setSoLinger( false, 0 );
-                    socket.connect( new InetSocketAddress( host, port ), 500 );
-                    return socket;
-                }
-
-                public ServerSocket createServerSocket( int port )
-                        throws IOException
-                {
-                    return new ServerSocket( port );
-                }
-            } );
             System.out.println("Name server ready.");
         } catch (ConnectException e) {
             System.err.println("Impossible de se connecter au registre RMI. Est-ce que rmiregistry est lancé?\n");
