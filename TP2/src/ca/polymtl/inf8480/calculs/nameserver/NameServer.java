@@ -2,45 +2,35 @@ package ca.polymtl.inf8480.calculs.nameserver;
 
 import ca.polymtl.inf8480.calculs.shared.ComputeServerInterface;
 import ca.polymtl.inf8480.calculs.shared.NameServerInterface;
+import ca.polymtl.inf8480.calculs.shared.Utils;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.ServerSocket;
-import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.rmi.ConnectException;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
-import java.rmi.server.RMISocketFactory;
 import java.rmi.server.UnicastRemoteObject;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.TreeSet;
-import java.security.MessageDigest;
-import java.util.stream.Collectors;
 
 public class NameServer implements NameServerInterface {
 
+    private final Object USERSLOCK = new Object();
     HashMap<String, UserPass> users;
     HashMap<String, ComputeServerInterface> info;
-    private final String DOMAIN = "polymtl.ca";
-    private final String SUBDOMAIN = "info";
-    private final Object USERSLOCK = new Object();
+
+    private NameServer() {
+        this.users = new HashMap<>();
+        this.info = new HashMap<>();
+    }
 
     public static void main(String args[]) {
         NameServer ns = new NameServer();
         ns.run();
         ns.buildServerList();
-    }
-
-    private NameServer() {
-        this.users = new HashMap<>();
-        this.info = new HashMap<>();
     }
 
     private void run() {
@@ -66,20 +56,22 @@ public class NameServer implements NameServerInterface {
     }
 
     public boolean authenticateClient(String username, String pwd) throws RemoteException {
-        synchronized(USERSLOCK) {
+        synchronized (USERSLOCK) {
             UserPass savedPwd = this.users.get(username);
             return savedPwd != null && this.hashSHA512(pwd, savedPwd.getSalt()).equals(savedPwd.getHashedPass());
         }
     }
 
     private void buildServerList() {
-        for (String host : readConfigFile(("./config/hosts.conf"))) {
+        info = new HashMap<>();
+        for (String host : Utils.readConfigFile(("./config/hosts.conf"))) {
             if (System.getSecurityManager() == null) {
                 System.setSecurityManager(new SecurityManager());
             }
             ComputeServerInterface distantServerStub = loadServerStub(host);
             if (distantServerStub != null) {
-                info.putIfAbsent(host, distantServerStub);
+                System.out.println("Found ComputeServer on host : " + host);
+                info.put(host, distantServerStub);
             }
         }
     }
@@ -100,21 +92,6 @@ public class NameServer implements NameServerInterface {
         return stub;
     }
 
-    private ArrayList<String> readConfigFile(String filename) {
-        ArrayList<String> lines = new ArrayList<>();
-        try {
-            BufferedReader in = new BufferedReader(new FileReader(filename));
-            String str;
-            while ((str = in.readLine()) != null) {
-                lines.add(str);
-            }
-            in.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return lines;
-    }
-
     private String hashSHA512(String toHash, String salt) {
         String hashed = null;
         try {
@@ -126,8 +103,7 @@ public class NameServer implements NameServerInterface {
                 sb.append(Integer.toString((aByte & 0xff) + 0x100, 16).substring(1));
             }
             hashed = sb.toString();
-        }
-        catch (NoSuchAlgorithmException e){
+        } catch (NoSuchAlgorithmException e) {
             e.printStackTrace();
         }
         return hashed;

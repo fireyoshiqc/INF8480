@@ -6,5 +6,6 @@ import java.util.ArrayList;
 
 public interface NameServerInterface extends Remote {
     ArrayList<String> getServers() throws RemoteException;
+
     boolean authenticateClient(String username, String pwd) throws RemoteException;
 }

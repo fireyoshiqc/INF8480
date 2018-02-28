@@ -5,6 +5,7 @@ import java.rmi.RemoteException;
 import java.util.ArrayList;
 
 public interface ComputeServerInterface extends Remote {
-    int calculate(ArrayList<OperationPair> ops) throws RemoteException;
+    int calculate(ArrayList<OperationPair> ops, String username, String pwd) throws RemoteException;
+
     int getCapacity() throws RemoteException;
 }

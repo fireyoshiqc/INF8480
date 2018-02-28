@@ -9,11 +9,11 @@ public class UserPass {
         this.hashedPass = hashedPass;
     }
 
-    public String getSalt(){
+    public String getSalt() {
         return this.salt;
     }
 
-    public String getHashedPass(){
+    public String getHashedPass() {
         return this.hashedPass;
     }
 }

@@ -1,15 +1,19 @@
 package ca.polymtl.inf8480.calculs.computeserver;
 
 import ca.polymtl.inf8480.calculs.shared.ComputeServerInterface;
+import ca.polymtl.inf8480.calculs.shared.NameServerInterface;
 import ca.polymtl.inf8480.calculs.shared.OperationPair;
+import ca.polymtl.inf8480.calculs.shared.Utils;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
 import java.rmi.ConnectException;
-import java.rmi.Remote;
+import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
-import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Random;
@@ -21,6 +25,13 @@ public class ComputeServer implements ComputeServerInterface {
 
     private int capacity;
     private float maliciousness;
+    private NameServerInterface nsStub;
+
+    public ComputeServer(int capacity, float maliciousness) {
+        super();
+        this.capacity = capacity;
+        this.maliciousness = maliciousness;
+    }
 
     public static void main(String args[]) {
 
@@ -71,12 +82,6 @@ public class ComputeServer implements ComputeServerInterface {
 
     }
 
-    public ComputeServer(int capacity, float maliciousness) {
-        super();
-        this.capacity = capacity;
-        this.maliciousness = maliciousness;
-    }
-
     private void run() {
         if (System.getSecurityManager() == null) {
             System.setSecurityManager(new SecurityManager());
@@ -93,34 +98,42 @@ public class ComputeServer implements ComputeServerInterface {
         } catch (Exception e) {
             System.err.println("Erreur: " + e.getMessage());
         }
+
+        this.nsStub = Utils.findNameServer();
     }
 
     @Override
-    public int calculate(ArrayList<OperationPair> ops) throws RemoteException {
-        // Capacity refusal
-        float refusalRate = (ops.size() - capacity)/(5*capacity);
-        Random rand = new Random(System.nanoTime());
-        if (refusalRate > 0.0f && rand.nextFloat() < refusalRate) {
-            return -1;
+    public int calculate(ArrayList<OperationPair> ops, String username, String pwd) throws RemoteException {
+        if (nsStub.authenticateClient(username, pwd)) {
+            // Capacity refusal
+            float refusalRate = (ops.size() - capacity) / (5 * capacity);
+            Random rand = new Random(System.nanoTime());
+            if (refusalRate > 0.0f && rand.nextFloat() < refusalRate) {
+                return -1;
+            }
+
+            // Malicious result
+            if (maliciousness > 0.0f && rand.nextFloat() < maliciousness) {
+                return rand.nextInt(4000);
+            }
+
+            // Valid result
+            int sum = 0;
+            for (OperationPair op : ops)
+                switch (op.operation.toLowerCase()) {
+                    case "pell":
+                        sum += Operations.pell(op.arg) % 4000;
+                        break;
+                    case "prime":
+                        sum += Operations.prime(op.arg) % 4000;
+                        break;
+                }
+            return sum;
+        } else {
+            // Authentication invalid
+            return -2;
         }
 
-        // Malicious result
-        if (maliciousness > 0.0f && rand.nextFloat() < maliciousness) {
-            return rand.nextInt(4000);
-        }
-
-        // Valid result
-        int sum = 0;
-        for (OperationPair op : ops)
-        switch (op.operation.toLowerCase()) {
-            case "pell":
-                sum += Operations.pell(op.arg) % 4000;
-                break;
-            case "prime":
-                sum += Operations.prime(op.arg) % 4000;
-                break;
-        }
-        return sum;
     }
 
     @Override
