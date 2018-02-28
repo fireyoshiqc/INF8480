@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<project basedir="." default="build-jar" name="TP1">
+	<property name="debuglevel" value="source,lines,vars" />
+	<path id="TP2.classpath">
+		<pathelement location="bin" />
+		<pathelement path="lib/commons-cli-1.4.jar" />
+	</path>
+	<target name="init">
+		<mkdir dir="bin" />
+		<copy includeemptydirs="false" todir="bin">
+			<fileset dir="src">
+				<exclude name="**/*.java" />
+			</fileset>
+		</copy>
+	</target>
+	<target name="clean">
+		<delete dir="bin" />
+		<delete file="nameserver.jar" />
+		<delete file="computeserver.jar" />
+		<delete file="client.jar" />
+		<delete file="shared.jar" />
+	</target>
+	<target depends="init" name="build-class">
+		<javac debug="true" debuglevel="${debuglevel}" destdir="bin" includeantruntime="false">
+			<src path="src" />
+			<classpath refid="TP2.classpath" />
+		</javac>
+	</target>
+	<target depends="build-class" name="build-jar">
+		<jar destfile="shared.jar" basedir="bin" includes="ca/polymtl/inf8480/calculs/shared/**" update="false" />
+		<jar destfile="computeserver.jar" basedir="bin" includes="ca/polymtl/inf8480/calculs/computeserver/**" update="false" />
+		<jar destfile="nameserver.jar" basedir="bin" includes="ca/polymtl/inf8480/calculs/nameserver/**" update="false" />
+		<jar destfile="client.jar" basedir="bin" includes="ca/polymtl/inf8480/calculs/client/**" update="false" />
+	</target>
+</project>

@@ -1,13 +1,21 @@
 package ca.polymtl.inf8480.calculs.nameserver;
 
+import ca.polymtl.inf8480.calculs.shared.ComputeServerInterface;
+import ca.polymtl.inf8480.calculs.shared.NameServerInterface;
+
 import java.nio.charset.StandardCharsets;
+import java.rmi.ConnectException;
+import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+import java.rmi.server.UnicastRemoteObject;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.TreeSet;
 import java.security.MessageDigest;
 
-public class NameServer {
+public class NameServer implements NameServerInterface {
 
     HashMap<String, UserPass> users;
     HashMap<String, String> info;
@@ -25,7 +33,25 @@ public class NameServer {
         this.info = new HashMap<>();
     }
 
-    public ArrayList<String> getServers() {
+    private void run() {
+        if (System.getSecurityManager() == null) {
+            System.setSecurityManager(new SecurityManager());
+        }
+
+        try {
+            NameServerInterface stub = (NameServerInterface) UnicastRemoteObject.exportObject(this, 0);
+            Registry registry = LocateRegistry.getRegistry();
+            registry.rebind("ns", stub);
+            System.out.println("Name server ready.");
+        } catch (ConnectException e) {
+            System.err.println("Impossible de se connecter au registre RMI. Est-ce que rmiregistry est lancé?\n");
+            System.err.println("Erreur" + e.getMessage());
+        } catch (Exception e) {
+            System.err.println("Erreur: " + e.getMessage());
+        }
+    }
+
+    public ArrayList<String> getServers() throws RemoteException {
         ArrayList<String> serverList = new ArrayList<>();
         for (String key : info.keySet()) {
             serverList.add(key+"."+SUBDOMAIN+"."+DOMAIN);
@@ -33,7 +59,7 @@ public class NameServer {
         return serverList;
     }
 
-    public boolean authenticateClient(String username, String pwd) {
+    public boolean authenticateClient(String username, String pwd) throws RemoteException {
         synchronized(USERSLOCK) {
             UserPass savedPwd = this.users.get(username);
             return savedPwd != null && this.hashSHA512(pwd, savedPwd.getSalt()).equals(savedPwd.getHashedPass());
