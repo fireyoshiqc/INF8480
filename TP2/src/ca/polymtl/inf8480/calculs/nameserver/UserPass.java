@@ -1,6 +1,8 @@
 package ca.polymtl.inf8480.calculs.nameserver;
 
-public class UserPass {
+import java.io.Serializable;
+
+public class UserPass implements Serializable {
     private String salt;
     private String hashedPass;
 

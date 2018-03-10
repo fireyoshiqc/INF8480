@@ -12,7 +12,7 @@ import java.util.ArrayList;
 public class Utils {
 
     public static NameServerInterface findNameServer() {
-        for (String host : readConfigFile(("./config/hosts.conf"))) {
+        for (String host : readFile(("./config/hosts.conf"))) {
             if (System.getSecurityManager() == null) {
                 System.setSecurityManager(new SecurityManager());
             }
@@ -25,7 +25,7 @@ public class Utils {
         return null;
     }
 
-    public static ArrayList<String> readConfigFile(String filename) {
+    public static ArrayList<String> readFile (String filename) {
         ArrayList<String> lines = new ArrayList<>();
         try {
             BufferedReader in = new BufferedReader(new FileReader(filename));
@@ -35,7 +35,7 @@ public class Utils {
             }
             in.close();
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println("Le fichier spécifié en entrée ("+filename+") est introuvable ou d'un mauvais format.");
         }
         return lines;
     }

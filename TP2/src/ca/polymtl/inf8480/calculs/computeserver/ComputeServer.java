@@ -5,11 +5,7 @@ import ca.polymtl.inf8480.calculs.shared.NameServerInterface;
 import ca.polymtl.inf8480.calculs.shared.OperationPair;
 import ca.polymtl.inf8480.calculs.shared.Utils;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
 import java.rmi.ConnectException;
-import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
