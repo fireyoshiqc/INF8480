@@ -92,7 +92,8 @@ public class Client {
         while (index[0] > 0) {
             csStubs.forEach((name, stub) -> {
                 int qty = capacities.get(name);
-                Thread t = new Thread(new ClientTask(stub, ops, qty, username, password, total, index, resultLock));
+                int curIdx = index[0];
+                Thread t = new Thread(new ClientTask(stub, ops, qty, username, password, total, curIdx, resultLock));
                 tasks.add(t);
                 t.start();
                 index[0] -= qty;

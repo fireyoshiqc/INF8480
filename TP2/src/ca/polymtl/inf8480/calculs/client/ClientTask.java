@@ -18,10 +18,10 @@ public class ClientTask implements Runnable {
     private final String username;
     private final String password;
     private int[] total;
-    private final int[] index;
+    private final int index;
     private final Object resultLock;
 
-    public ClientTask(ComputeServerInterface stub, List<OperationPair> ops, int qty, String username, String password, int[] total, int[] index, Object resultLock) {
+    public ClientTask(ComputeServerInterface stub, List<OperationPair> ops, int qty, String username, String password, int[] total, int index, Object resultLock) {
         this.stub = stub;
         this.ops = ops;
         this.qty = qty;
@@ -35,10 +35,7 @@ public class ClientTask implements Runnable {
     @Override
     public void run() {
         try {
-            if (index[0] - qty < 0) {
-                qty = index[0];
-            }
-                int res = stub.calculate(new ArrayList<>(ops.subList(index[0]-qty, index[0])), username, password);
+            int res = stub.calculate(new ArrayList<>(ops.subList(Math.max(index-qty, 0), index)), username, password);
             synchronized(resultLock){
                 total[0] += res;
             }
