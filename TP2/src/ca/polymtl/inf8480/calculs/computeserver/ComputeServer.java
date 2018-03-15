@@ -12,6 +12,7 @@ import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Random;
 
 import static java.lang.System.exit;
@@ -99,7 +100,7 @@ public class ComputeServer implements ComputeServerInterface {
     }
 
     @Override
-    public int calculate(ArrayList<OperationPair> ops, String username, String pwd) throws RemoteException {
+    public int calculate(List<OperationPair> ops, String username, String pwd) throws RemoteException {
         if (nsStub.authenticateClient(username, pwd)) {
             // Capacity refusal
             float refusalRate = (ops.size() - capacity) / (5 * capacity);

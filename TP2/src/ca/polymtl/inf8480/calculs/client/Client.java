@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.lang.System.exit;
 
@@ -82,6 +83,32 @@ public class Client {
         for (int capacity : capacities.values()) {
             totalCapacity += capacity;
         }
+
+        Object resultLock = new Object();
+        int[] total = {0};
+        int[] index = {ops.size()};
+        ArrayList<Thread> tasks = new ArrayList<>();
+        // VERSION TRÈS SIMPLE POUR TESTER
+        while (index[0] > 0) {
+            csStubs.forEach((name, stub) -> {
+                int qty = capacities.get(name);
+                Thread t = new Thread(new ClientTask(stub, ops, qty, username, password, total, index, resultLock));
+                tasks.add(t);
+                t.start();
+                index[0] -= qty;
+            });
+
+            for (Thread t : tasks) {
+                try {
+                    t.join();
+                } catch (InterruptedException e) {
+                    System.out.println("Un thread de calcul a été interrompu : " + e.getMessage());
+                    exit(1);
+                }
+            }
+        }
+
+        System.out.println("Résultat total : " + total[0]);
     }
 
     public static void main(String args[]) {

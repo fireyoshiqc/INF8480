@@ -6,6 +6,5 @@ import java.util.HashMap;
 
 public interface NameServerInterface extends Remote {
     HashMap<String, ComputeServerInterface> getServers() throws RemoteException;
-
     boolean authenticateClient(String username, String pwd) throws RemoteException;
 }
