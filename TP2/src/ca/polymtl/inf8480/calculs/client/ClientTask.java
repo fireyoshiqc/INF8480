@@ -5,6 +5,7 @@ import ca.polymtl.inf8480.calculs.shared.ComputeServerInterface;
 import ca.polymtl.inf8480.calculs.shared.OperationPair;
 
 import java.rmi.RemoteException;
+import java.util.ArrayList;
 import java.util.List;
 
 import static java.lang.System.exit;
@@ -37,7 +38,7 @@ public class ClientTask implements Runnable {
             if (index[0] - qty < 0) {
                 qty = index[0];
             }
-                int res = stub.calculate(ops.subList(index[0]-qty, index[0]), username, password);
+                int res = stub.calculate(new ArrayList<>(ops.subList(index[0]-qty, index[0])), username, password);
             synchronized(resultLock){
                 total[0] += res;
             }

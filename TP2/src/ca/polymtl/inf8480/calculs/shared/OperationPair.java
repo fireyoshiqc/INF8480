@@ -1,6 +1,8 @@
 package ca.polymtl.inf8480.calculs.shared;
 
-public class OperationPair {
+import java.io.Serializable;
+
+public class OperationPair implements Serializable {
     public String operation;
     public int arg;
 
