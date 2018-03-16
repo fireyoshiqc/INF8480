@@ -26,13 +26,15 @@ public class Client {
     private HashMap<String, Integer> capacities;
     private String username;
     private String password;
+    private List<OperationPair> ops;
+    private int result;
 
     public Client(String inputFile, String username, String password) {
 
         this.username = username;
         this.password = password;
         List<String> lines = Utils.readFile(inputFile);
-        List<OperationPair> ops = new ArrayList<>();
+        ops = new ArrayList<>();
         if (lines.isEmpty()) {
             System.out.println("Aucune opération spécifiée. Arrêt du répartiteur.");
             exit(1);
@@ -40,13 +42,13 @@ public class Client {
         for (String line : lines) {
             String[] lineOps = line.split(" ");
             if (!lineOps[0].toLowerCase().equals("pell") && !lineOps[0].toLowerCase().equals("prime")) {
-                System.out.println("Le fichier d'entrée contient une opération invalide ("+ lineOps[0] + "). Arrêt du répartiteur.");
+                System.out.println("Le fichier d'entrée contient une opération invalide (" + lineOps[0] + "). Arrêt du répartiteur.");
                 exit(1);
             }
             try {
                 ops.add(new OperationPair(lineOps[0], Integer.parseInt(lineOps[1])));
             } catch (NumberFormatException e) {
-                System.out.println("Le fichier d'entrée contient un argument numérique invalide ("+ lineOps[1] + "). Arrêt du répartiteur.");
+                System.out.println("Le fichier d'entrée contient un argument numérique invalide (" + lineOps[1] + "). Arrêt du répartiteur.");
                 exit(1);
             } catch (ArrayIndexOutOfBoundsException e) {
                 System.out.println("Le fichier d'entrée contient une opération sans argument numérique. Arrêt du répartiteur.");
@@ -93,11 +95,13 @@ public class Client {
             csStubs.forEach((name, stub) -> {
                 int qty = capacities.get(name);
                 int curIdx = index[0];
-                Thread t = new Thread(new ClientTask(stub, ops, qty, username, password, total, curIdx, resultLock));
+                final ClientTask.TaskResult[] taskResult = new ClientTask.TaskResult[1];
+                Thread t = new Thread(new ClientTask(name, stub, ops, qty, username, password, total, curIdx, resultLock, taskResult));
                 tasks.add(t);
                 t.start();
                 index[0] -= qty;
             });
+
 
             for (Thread t : tasks) {
                 try {
@@ -107,6 +111,7 @@ public class Client {
                     exit(1);
                 }
             }
+
         }
 
         System.out.println("Résultat total : " + total[0]);
@@ -138,7 +143,6 @@ public class Client {
         }
 
         Client client = new Client(inputFile, username, password);
-
     }
 
     private void queryNameServer() {
@@ -166,4 +170,36 @@ public class Client {
         }
     }
 
+    /*
+    @Override
+    public void onClientTaskComplete(ClientTask task) {
+        System.out.println("CLIENT TASK COMPLETE");
+        String serverName = task.getName();
+        switch (task.getTaskResult()) {
+            case OK:
+                break;
+            case REFUSED:
+                //List<OperationPair> taskOps = task.getOps();
+                //ops.addAll(taskOps);
+                break;
+            case UNDEFINED:
+                System.out.println("Le client est dans un état illégal (IllegalStateException");
+                exit(1);
+                break;
+            case AUTH_FAILED:
+                csStubs.remove(serverName);
+                capacities.remove(serverName);
+                break;
+            case NO_NAMESERVER:
+                csStubs.remove(serverName);
+                capacities.remove(serverName);
+                break;
+            case RMI_EXCEPTION:
+                csStubs.remove(serverName);
+                capacities.remove(serverName);
+                break;
+
+        }
+    }
+    */
 }
