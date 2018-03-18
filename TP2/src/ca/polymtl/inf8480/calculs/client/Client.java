@@ -89,29 +89,29 @@ public class Client {
         Object resultLock = new Object();
         int[] total = {0};
         int[] index = {ops.size()};
-        ArrayList<Thread> tasks = new ArrayList<>();
+        HashMap<Thread, ClientTask> tasks = new HashMap<>();
         // VERSION TRÈS SIMPLE POUR TESTER
         while (index[0] > 0) {
             csStubs.forEach((name, stub) -> {
                 int qty = capacities.get(name);
                 int curIdx = index[0];
-                final ClientTask.TaskResult[] taskResult = new ClientTask.TaskResult[1];
-                Thread t = new Thread(new ClientTask(name, stub, ops, qty, username, password, total, curIdx, resultLock, taskResult));
-                tasks.add(t);
+                ClientTask task = new ClientTask(name, stub, ops, qty, username, password, total, curIdx, resultLock);
+                Thread t = new Thread(task);
+                tasks.put(t, task);
                 t.start();
                 index[0] -= qty;
             });
 
-
-            for (Thread t : tasks) {
+            tasks.forEach((t, task) -> {
                 try {
                     t.join();
+                    System.out.println(task.getStatus().getResult());
+
                 } catch (InterruptedException e) {
                     System.out.println("Un thread de calcul a été interrompu : " + e.getMessage());
                     exit(1);
                 }
-            }
-
+            });
         }
 
         System.out.println("Résultat total : " + total[0]);

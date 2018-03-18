@@ -24,9 +24,9 @@ public class ClientTask implements Runnable {
     private int[] total;
     private final int index;
     private final Object resultLock;
-    private final TaskResult[] taskResult;
+    private ClientTaskInfo status;
 
-    public ClientTask(String name, ComputeServerInterface stub, List<OperationPair> ops, int qty, String username, String password, int[] total, int index, Object resultLock, TaskResult[] taskResult) {
+    public ClientTask(String name, ComputeServerInterface stub, List<OperationPair> ops, int qty, String username, String password, int[] total, int index, Object resultLock) {
         this.name = name;
         this.stub = stub;
         this.ops = ops;
@@ -36,11 +36,6 @@ public class ClientTask implements Runnable {
         this.total = total;
         this.index = index;
         this.resultLock = resultLock;
-        this.taskResult = taskResult;
-    }
-
-    public TaskResult[] getTaskResult() {
-        return taskResult;
     }
 
     public List<OperationPair> getOps() {
@@ -53,31 +48,53 @@ public class ClientTask implements Runnable {
 
     @Override
     public void run() {
+        List<OperationPair> subOps = ops.subList(Math.max(index-qty, 0), index);
         try {
-            int res = stub.calculate(new ArrayList<>(ops.subList(Math.max(index-qty, 0), index)), username, password);
+            int res = stub.calculate(new ArrayList<>(subOps), username, password);
             if (res >= 0) {
                 synchronized(resultLock){
                     total[0] = (total[0] + res) % 4000;
                 }
-                taskResult[0] = TaskResult.OK;
+                status = new ClientTaskInfo(TaskResult.OK, subOps);
             }
             else if (res == -1) {
                 System.out.println("La tâche a été refusée sur le serveur de calcul '" + name + "'.");
-                taskResult[0] = TaskResult.REFUSED;
+                status = new ClientTaskInfo(TaskResult.REFUSED, subOps);
             }
             else if (res == -2) {
                 System.out.println("L'authentification est incorrecte sur le serveur de calcul '" + name + "'.");
-                taskResult[0] = TaskResult.AUTH_FAILED;
+                status = new ClientTaskInfo(TaskResult.AUTH_FAILED, subOps);
             }
             else if (res == -3) {
                 System.out.println("Le serveur de noms n'a pas été trouvé à partir du serveur de calcul '" + name + "'.");
-                taskResult[0] = TaskResult.NO_NAMESERVER;
+                status = new ClientTaskInfo(TaskResult.NO_NAMESERVER, subOps);
             }
 
         } catch (RemoteException e) {
             System.out.println("Une erreur RMI est survenue : " + e.getMessage());
-            taskResult[0] = TaskResult.RMI_EXCEPTION;
+            status = new ClientTaskInfo(TaskResult.RMI_EXCEPTION, subOps);
         }
 
+    }
+
+    public ClientTaskInfo getStatus() {
+        return status;
+    }
+
+    class ClientTaskInfo {
+        private TaskResult result;
+        private List<OperationPair> sublist;
+        ClientTaskInfo(TaskResult result, List<OperationPair> sublist) {
+            this.result = result;
+            this.sublist = sublist;
+        }
+
+        public TaskResult getResult() {
+            return result;
+        }
+
+        public List<OperationPair> getSublist() {
+            return sublist;
+        }
     }
 }
