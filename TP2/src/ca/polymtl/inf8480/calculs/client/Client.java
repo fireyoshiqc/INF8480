@@ -256,8 +256,8 @@ public class Client {
                         String serverName = res.getServerName();
                         int result = res.getResult();
                         int resChunk = res.getChunk();
-                        List<Integer> oldList = resultsToValidate.putIfAbsent(resChunk, Arrays.asList(result));
-                        if (oldList != null) {
+                        ArrayList<Integer> oldList = new ArrayList<>(resultsToValidate.putIfAbsent(resChunk, Arrays.asList(result)));
+                        if (!oldList.isEmpty()) {
                             if (oldList.indexOf(result) != -1) {
                                 resultsToValidate.remove(resChunk);
                                 total = (total + result) % 4000;
