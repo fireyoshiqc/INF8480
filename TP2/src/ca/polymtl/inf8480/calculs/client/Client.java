@@ -26,16 +26,9 @@ public class Client {
     private NameServerInterface nsStub;
     private HashMap<String, ComputeServerInterface> csStubs;
     private HashMap<String, Integer> capacities;
-    private String username;
-    private String password;
     private List<OperationPair> ops;
-    private int result;
-    private final Object TOTAL_LOCK = new Object();
 
-    public Client(String inputFile, String username, String password) {
-
-        this.username = username;
-        this.password = password;
+    public Client(String inputFile, String username, String password, boolean secure) {
         List<String> lines = Utils.readFile(inputFile);
         ops = new ArrayList<>();
         if (lines.isEmpty()) {
@@ -45,13 +38,13 @@ public class Client {
         for (String line : lines) {
             String[] lineOps = line.split(" ");
             if (!lineOps[0].toLowerCase().equals("pell") && !lineOps[0].toLowerCase().equals("prime")) {
-                System.out.println("Le fichier d'entrée contient une opération invalide (" + lineOps[0] + "). Arrêt du répartiteur.");
+                System.out.printf("Le fichier d'entrée contient une opération invalide (%s). Arrêt du répartiteur.%n", lineOps[0]);
                 exit(1);
             }
             try {
                 ops.add(new OperationPair(lineOps[0], Integer.parseInt(lineOps[1])));
             } catch (NumberFormatException e) {
-                System.out.println("Le fichier d'entrée contient un argument numérique invalide (" + lineOps[1] + "). Arrêt du répartiteur.");
+                System.out.printf("Le fichier d'entrée contient un argument numérique invalide (%s). Arrêt du répartiteur.%n", lineOps[1]);
                 exit(1);
             } catch (ArrayIndexOutOfBoundsException e) {
                 System.out.println("Le fichier d'entrée contient une opération sans argument numérique. Arrêt du répartiteur.");
@@ -90,15 +83,78 @@ public class Client {
         }
 
         Object resultLock = new Object();
-        int total = 0;
-        //HashMap<Thread, ClientTask> tasks = new HashMap<>();
 
+        System.out.printf("Démarrage du répartiteur en mode %s.%n", secure ? "sécurisé" : "non-sécurisé");
+
+        int total = secure ? secureCalculation(username, password) : insecureCalculation(username, password);
+
+        System.out.println("Résultat total : " + total);
+        exit(0);
+    }
+
+    public static void main(String args[]) {
+
+        ArrayList<String> arguments = new ArrayList<>(Arrays.asList(args));
+        int posI = arguments.lastIndexOf("-i");
+        int posU = arguments.lastIndexOf("-u");
+        int posP = arguments.lastIndexOf("-p");
+        int posM = arguments.lastIndexOf("-m");
+        if (posI == -1 || posU == -1 || posP == -1 || arguments.size() < 6) {
+            System.out.println("Les options -i <fichier>, -u <username> et -p <password> sont obligatoires.");
+            System.out.println("Usage :\n-i <String>\t: Fichier de calculs en entrée.\n-u <String>\t: Nom de l'utilisateur." +
+                    "\n-p <String>\t: Mot de passe.");
+            exit(1);
+        }
+        String inputFile = arguments.get(posI + 1);
+        String username = arguments.get(posU + 1);
+        String password = arguments.get(posP + 1);
+
+        // Empêcher l'utilisation de deux options consécutives
+        if (inputFile.equals("-u") || inputFile.equals("-p") || inputFile.equals("-m")
+                || username.equals("-i") || username.equals("-p") || username.equals("-m")
+                || password.equals("-i") || password.equals("-u") || password.equals("-m")) {
+            System.out.println("Les options -i <fichier>, -u <username> et -p <password> sont obligatoires.");
+            System.out.println("Usage :\n-i <String>\t: Fichier de calculs en entrée.\n-u <String>\t: Nom de l'utilisateur." +
+                    "\n-p <String>\t: Mot de passe.\n-m\t: Mode malicieux (non-sécurisé).");
+            exit(1);
+        }
+
+        Client client = new Client(inputFile, username, password, posM == -1);
+    }
+
+    private void queryNameServer() {
+        if ((nsStub = Utils.findNameServer()) == null) {
+            System.out.println("Aucun serveur de noms n'est disponible. Arrêt du répartiteur.");
+            exit(1);
+        }
+    }
+
+    private void queryComputeServers() {
+        try {
+            csStubs = nsStub.getServers();
+            if (csStubs != null && !csStubs.isEmpty()) {
+                for (String server : csStubs.keySet()) {
+                    System.out.println(server);
+                }
+            } else {
+                System.out.println("Aucun serveur de calcul n'est présentement disponible. Arrêt du répartiteur.");
+                exit(1);
+            }
+
+        } catch (RemoteException e) {
+            System.out.printf("Une erreur RMI est survenue : %s%n", e.getMessage());
+            exit(1);
+        }
+    }
+
+    private int secureCalculation(String username, String password) {
+        int total = 0;
         List<ClientTask> tasks = new ArrayList<>();
         Executor ex = Executors.newCachedThreadPool();
         ExecutorCompletionService<ClientTask.ClientTaskInfo> ecs = new ExecutorCompletionService<>(ex);
 
         csStubs.forEach((name, stub) -> {
-            int qty = (int)(capacities.get(name)*2);
+            int qty = (int) (capacities.get(name) * 2);
             List<OperationPair> subOps = ops.subList(Math.max(ops.size() - qty, 0), ops.size());
             ClientTask task = new ClientTask(name, stub, new ArrayList<>(subOps), username, password);
             tasks.add(task);
@@ -119,7 +175,7 @@ public class Client {
                         total = (total + res.getResult()) % 4000;
                         if (!ops.isEmpty()) {
                             String name = res.getServerName();
-                            int qty = (int)(capacities.get(name)*2);
+                            int qty = (int) (capacities.get(name) * 2);
                             List<OperationPair> subOps = ops.subList(Math.max(ops.size() - qty, 0), ops.size());
                             ClientTask task = new ClientTask(name, csStubs.get(name), new ArrayList<>(subOps), username, password);
                             ecs.submit(task);
@@ -166,60 +222,10 @@ public class Client {
                 e.printStackTrace();
             }
         }
-        System.out.println("Résultat total : " + total);
-        exit(0);
+        return total;
     }
 
-    public static void main(String args[]) {
-
-        ArrayList<String> arguments = new ArrayList<>(Arrays.asList(args));
-        int posI = arguments.lastIndexOf("-i");
-        int posU = arguments.lastIndexOf("-u");
-        int posP = arguments.lastIndexOf("-p");
-        if (posI == -1 || posU == -1 || posP == -1 || arguments.size() < 6) {
-            System.out.println("Les options -i <fichier>, -u <username> et -p <password> sont obligatoires.");
-            System.out.println("Usage :\n-i <String>\t: Fichier de calculs en entrée.\n-u <String>\t: Nom de l'utilisateur." +
-                    "\n-p <String>\t: Mot de passe.");
-            exit(1);
-        }
-        String inputFile = arguments.get(posI + 1);
-        String username = arguments.get(posU + 1);
-        String password = arguments.get(posP + 1);
-
-        // Empêcher l'utilisation de deux options consécutives
-        if (inputFile.equals("-u") || inputFile.equals("-p") || username.equals("-i") || username.equals("-p")
-                || password.equals("-i") || password.equals("-u")) {
-            System.out.println("Les options -i <fichier>, -u <username> et -p <password> sont obligatoires.");
-            System.out.println("Usage :\n-i <String>\t: Fichier de calculs en entrée.\n-u <String>\t: Nom de l'utilisateur." +
-                    "\n-p <String>\t: Mot de passe.");
-            exit(1);
-        }
-
-        Client client = new Client(inputFile, username, password);
-    }
-
-    private void queryNameServer() {
-        if ((nsStub = Utils.findNameServer()) == null) {
-            System.out.println("Aucun serveur de noms n'est disponible. Arrêt du répartiteur.");
-            exit(1);
-        }
-    }
-
-    private void queryComputeServers() {
-        try {
-            csStubs = nsStub.getServers();
-            if (csStubs != null && !csStubs.isEmpty()) {
-                for (String server : csStubs.keySet()) {
-                    System.out.println(server);
-                }
-            } else {
-                System.out.println("Aucun serveur de calcul n'est présentement disponible. Arrêt du répartiteur.");
-                exit(1);
-            }
-
-        } catch (RemoteException e) {
-            System.out.println("Une erreur RMI est survenue : " + e.getMessage());
-            exit(1);
-        }
+    private int insecureCalculation(String username, String password) {
+        return 0;
     }
 }
