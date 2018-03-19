@@ -98,7 +98,7 @@ public class Client {
         ExecutorCompletionService<ClientTask.ClientTaskInfo> ecs = new ExecutorCompletionService<>(ex);
 
         csStubs.forEach((name, stub) -> {
-            int qty = capacities.get(name);
+            int qty = (int)(capacities.get(name)*2);
             List<OperationPair> subOps = ops.subList(Math.max(ops.size() - qty, 0), ops.size());
             ClientTask task = new ClientTask(name, stub, new ArrayList<>(subOps), username, password);
             tasks.add(task);
@@ -119,7 +119,8 @@ public class Client {
                         total = (total + res.getResult()) % 4000;
                         if (!ops.isEmpty()) {
                             String name = res.getServerName();
-                            List<OperationPair> subOps = ops.subList(Math.max(ops.size()- capacities.get(name), 0), ops.size());
+                            int qty = (int)(capacities.get(name)*2);
+                            List<OperationPair> subOps = ops.subList(Math.max(ops.size() - qty, 0), ops.size());
                             ClientTask task = new ClientTask(name, csStubs.get(name), new ArrayList<>(subOps), username, password);
                             ecs.submit(task);
                             ops.removeAll(subOps);
@@ -128,66 +129,43 @@ public class Client {
                         }
                         break;
                     case REFUSED:
+                        String name = res.getServerName();
+                        System.out.println(String.format("Le serveur '%s' a refusé la tâche. Renvoi.", res.getServerName()));
+                        ClientTask task = new ClientTask(name, csStubs.get(name), new ArrayList<>(res.getSublist()), username, password);
+                        ecs.submit(task);
                         break;
                     case AUTH_FAILED:
+                        csStubs.remove(res.getServerName());
+                        ops.addAll(res.getSublist());
+                        System.out.println(String.format("Échec de l'authentification sur le serveur '%s'", res.getServerName()));
+                        if (csStubs.isEmpty()) {
+                            System.out.println("Aucun serveur de calcul n'est présentement disponible. Arrêt du répartiteur.");
+                            exit(1);
+                        }
                         break;
                     case NO_NAMESERVER:
+                        csStubs.remove(res.getServerName());
+                        ops.addAll(res.getSublist());
+                        System.out.println(String.format("Échec de la communication avec le serveur de noms à partir de '%s'", res.getServerName()));
+                        if (csStubs.isEmpty()) {
+                            System.out.println("Aucun serveur de noms n'est disponible. Arrêt du répartiteur.");
+                            exit(1);
+                        }
                         break;
                     case RMI_EXCEPTION:
+                        csStubs.remove(res.getServerName());
+                        ops.addAll(res.getSublist());
+                        System.out.println(String.format("Une erreur RMI est survenue sur le serveur '%s'", res.getServerName()));
+                        if (csStubs.isEmpty()) {
+                            System.out.println("Aucun serveur de calcul n'est disponible. Arrêt du répartiteur.");
+                            exit(1);
+                        }
                         break;
-
                 }
             } catch (InterruptedException | ExecutionException e) {
                 e.printStackTrace();
             }
         }
-
-
-/*
-        for (int i = 0; i < tasks.size(); i++) {
-            try {
-                ClientTask.ClientTaskInfo res = ecs.take().get();
-                if (res.getStatus() == ClientTask.TaskResult.OK) {
-                    synchronized (TOTAL_LOCK) {
-                        total += res.getResult();
-                    }
-                    if (index[0] >= 0) {
-
-                    }
-                }
-            } catch (InterruptedException | ExecutionException e) {
-                System.out.println("Problème de thread.");
-            }
-
-        }
-        */
-
-        /*
-        // VERSION TRÈS SIMPLE POUR TESTER
-        while (index[0] > 0) {
-            csStubs.forEach((name, stub) -> {
-                int qty = capacities.get(name);
-                int curIdx = index[0];
-                ClientTask task = new ClientTask(name, stub, ops, qty, username, password, total, curIdx, resultLock);
-                Thread t = new Thread(task);
-                tasks.put(t, task);
-                t.start();
-                index[0] -= qty;
-            });
-
-            tasks.forEach((t, task) -> {
-                try {
-                    t.join();
-                    System.out.println(task.getStatus().getResult());
-
-                } catch (InterruptedException e) {
-                    System.out.println("Un thread de calcul a été interrompu : " + e.getMessage());
-                    exit(1);
-                }
-            });
-        }
-        */
-
         System.out.println("Résultat total : " + total);
         exit(0);
     }
@@ -244,37 +222,4 @@ public class Client {
             exit(1);
         }
     }
-
-    /*
-    @Override
-    public void onClientTaskComplete(ClientTask task) {
-        System.out.println("CLIENT TASK COMPLETE");
-        String serverName = task.getName();
-        switch (task.getTaskResult()) {
-            case OK:
-                break;
-            case REFUSED:
-                //List<OperationPair> taskOps = task.getOps();
-                //ops.addAll(taskOps);
-                break;
-            case UNDEFINED:
-                System.out.println("Le client est dans un état illégal (IllegalStateException");
-                exit(1);
-                break;
-            case AUTH_FAILED:
-                csStubs.remove(serverName);
-                capacities.remove(serverName);
-                break;
-            case NO_NAMESERVER:
-                csStubs.remove(serverName);
-                capacities.remove(serverName);
-                break;
-            case RMI_EXCEPTION:
-                csStubs.remove(serverName);
-                capacities.remove(serverName);
-                break;
-
-        }
-    }
-    */
 }

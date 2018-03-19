@@ -33,18 +33,14 @@ public class ClientTask implements Callable<ClientTask.ClientTaskInfo> {
             if (res >= 0) {
                 status = new ClientTaskInfo(res, TaskResult.OK, ops, name);
             } else if (res == -1) {
-                System.out.println("La tâche a été refusée sur le serveur de calcul '" + name + "'.");
                 status = new ClientTaskInfo(res, TaskResult.REFUSED, ops, name);
             } else if (res == -2) {
-                System.out.println("L'authentification est incorrecte sur le serveur de calcul '" + name + "'.");
                 status = new ClientTaskInfo(res, TaskResult.AUTH_FAILED, ops, name);
             } else if (res == -3) {
-                System.out.println("Le serveur de noms n'a pas été trouvé à partir du serveur de calcul '" + name + "'.");
                 status = new ClientTaskInfo(res, TaskResult.NO_NAMESERVER, ops, name);
             }
 
         } catch (RemoteException e) {
-            System.out.println("Une erreur RMI est survenue : " + e.getMessage());
             status = new ClientTaskInfo(-4, TaskResult.RMI_EXCEPTION, ops, name);
         }
         return status;

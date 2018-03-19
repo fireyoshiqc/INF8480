@@ -109,7 +109,7 @@ public class ComputeServer implements ComputeServerInterface {
         if (nsStub != null) {
             if (nsStub.authenticateClient(username, pwd)) {
                 // Capacity refusal
-                float refusalRate = (ops.size() - capacity) / (5 * capacity);
+                float refusalRate = (float)(ops.size() - capacity) / (float)(5 * capacity);
                 Random rand = new Random(System.nanoTime());
                 if (refusalRate > 0.0f && rand.nextFloat() < refusalRate) {
                     return -1;
