@@ -15,15 +15,16 @@ public class ClientTask implements Callable<ClientTask.ClientTaskInfo> {
     private String name;
     private ComputeServerInterface stub;
     private List<OperationPair> ops;
-    private int qty;
+    private int chunk;
     private ClientTaskInfo status;
 
-    public ClientTask(String name, ComputeServerInterface stub, List<OperationPair> ops, String username, String password) {
+    public ClientTask(String name, ComputeServerInterface stub, List<OperationPair> ops, String username, String password, int chunk) {
         this.name = name;
         this.stub = stub;
         this.ops = ops;
         this.username = username;
         this.password = password;
+        this.chunk = chunk;
     }
 
     @Override
@@ -31,17 +32,17 @@ public class ClientTask implements Callable<ClientTask.ClientTaskInfo> {
         try {
             int res = stub.calculate(ops, username, password);
             if (res >= 0) {
-                status = new ClientTaskInfo(res, TaskResult.OK, ops, name);
+                status = new ClientTaskInfo(res, TaskResult.OK, ops, name, chunk);
             } else if (res == -1) {
-                status = new ClientTaskInfo(res, TaskResult.REFUSED, ops, name);
+                status = new ClientTaskInfo(res, TaskResult.REFUSED, ops, name, chunk);
             } else if (res == -2) {
-                status = new ClientTaskInfo(res, TaskResult.AUTH_FAILED, ops, name);
+                status = new ClientTaskInfo(res, TaskResult.AUTH_FAILED, ops, name, chunk);
             } else if (res == -3) {
-                status = new ClientTaskInfo(res, TaskResult.NO_NAMESERVER, ops, name);
+                status = new ClientTaskInfo(res, TaskResult.NO_NAMESERVER, ops, name, chunk);
             }
 
         } catch (RemoteException e) {
-            status = new ClientTaskInfo(-4, TaskResult.RMI_EXCEPTION, ops, name);
+            status = new ClientTaskInfo(-4, TaskResult.RMI_EXCEPTION, ops, name, chunk);
         }
         return status;
     }
@@ -56,12 +57,14 @@ public class ClientTask implements Callable<ClientTask.ClientTaskInfo> {
         private TaskResult status;
         private List<OperationPair> sublist;
         private String serverName;
+        private int chunk;
 
-        ClientTaskInfo(int result, TaskResult status, List<OperationPair> sublist, String serverName) {
+        ClientTaskInfo(int result, TaskResult status, List<OperationPair> sublist, String serverName, int chunk) {
             this.result = result;
             this.status = status;
             this.sublist = sublist;
             this.serverName = serverName;
+            this.chunk = chunk;
         }
 
         public int getResult() {
@@ -78,6 +81,10 @@ public class ClientTask implements Callable<ClientTask.ClientTaskInfo> {
 
         public String getServerName() {
             return serverName;
+        }
+
+        public int getChunk() {
+            return chunk;
         }
     }
 }

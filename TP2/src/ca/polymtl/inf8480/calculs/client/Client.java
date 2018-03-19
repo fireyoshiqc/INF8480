@@ -1,5 +1,6 @@
 package ca.polymtl.inf8480.calculs.client;
 
+import ca.polymtl.inf8480.calculs.computeserver.ComputeServer;
 import ca.polymtl.inf8480.calculs.nameserver.NameServer;
 import ca.polymtl.inf8480.calculs.shared.ComputeServerInterface;
 import ca.polymtl.inf8480.calculs.shared.NameServerInterface;
@@ -12,10 +13,7 @@ import java.io.IOException;
 import java.lang.reflect.Array;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -27,6 +25,7 @@ public class Client {
     private HashMap<String, ComputeServerInterface> csStubs;
     private HashMap<String, Integer> capacities;
     private List<OperationPair> ops;
+    private final int[] fChunk = {0};
 
     public Client(String inputFile, String username, String password, boolean secure) {
         List<String> lines = Utils.readFile(inputFile);
@@ -156,7 +155,7 @@ public class Client {
         csStubs.forEach((name, stub) -> {
             int qty = (int) (capacities.get(name) * 2);
             List<OperationPair> subOps = ops.subList(Math.max(ops.size() - qty, 0), ops.size());
-            ClientTask task = new ClientTask(name, stub, new ArrayList<>(subOps), username, password);
+            ClientTask task = new ClientTask(name, stub, new ArrayList<>(subOps), username, password, -1);
             tasks.add(task);
             ops.removeAll(subOps);
         });
@@ -177,7 +176,7 @@ public class Client {
                             String name = res.getServerName();
                             int qty = (int) (capacities.get(name) * 2);
                             List<OperationPair> subOps = ops.subList(Math.max(ops.size() - qty, 0), ops.size());
-                            ClientTask task = new ClientTask(name, csStubs.get(name), new ArrayList<>(subOps), username, password);
+                            ClientTask task = new ClientTask(name, csStubs.get(name), new ArrayList<>(subOps), username, password, -1);
                             ecs.submit(task);
                             ops.removeAll(subOps);
                         } else {
@@ -187,7 +186,7 @@ public class Client {
                     case REFUSED:
                         String name = res.getServerName();
                         System.out.println(String.format("Le serveur '%s' a refusé la tâche. Renvoi.", res.getServerName()));
-                        ClientTask task = new ClientTask(name, csStubs.get(name), new ArrayList<>(res.getSublist()), username, password);
+                        ClientTask task = new ClientTask(name, csStubs.get(name), new ArrayList<>(res.getSublist()), username, password, -1);
                         ecs.submit(task);
                         break;
                     case AUTH_FAILED:
@@ -226,6 +225,127 @@ public class Client {
     }
 
     private int insecureCalculation(String username, String password) {
-        return 0;
+        int total = 0;
+        List<ClientTask> tasks = new ArrayList<>();
+        Executor ex = Executors.newCachedThreadPool();
+        ExecutorCompletionService<ClientTask.ClientTaskInfo> ecs = new ExecutorCompletionService<>(ex);
+
+        csStubs.forEach((name, stub) -> {
+            int qty = (int) (capacities.get(name) * 2);
+            List<OperationPair> subOps = ops.subList(Math.max(ops.size() - qty, 0), ops.size());
+            int chunk = fChunk[0];
+            ClientTask task = new ClientTask(name, stub, new ArrayList<>(subOps), username, password, chunk);
+            fChunk[0]++;
+            tasks.add(task);
+            ops.removeAll(subOps);
+        });
+
+        for (ClientTask task : tasks) {
+            ecs.submit(task);
+        }
+
+        int remainingTasks = tasks.size();
+
+        HashMap<Integer, List<Integer>> resultsToValidate = new HashMap<>();
+
+        while (remainingTasks > 0) {
+            try {
+                ClientTask.ClientTaskInfo res = ecs.take().get();
+                switch (res.getStatus()) {
+                    case OK:
+                        String serverName = res.getServerName();
+                        int result = res.getResult();
+                        int resChunk = res.getChunk();
+                        List<Integer> oldList = resultsToValidate.putIfAbsent(resChunk, Arrays.asList(result));
+                        if (oldList != null) {
+                            if (oldList.indexOf(result) != -1) {
+                                resultsToValidate.remove(resChunk);
+                                total = (total + result) % 4000;
+                                if (!ops.isEmpty()) {
+                                    int qty = (int) (capacities.get(serverName) * 2);
+                                    List<OperationPair> subOps = ops.subList(Math.max(ops.size() - qty, 0), ops.size());
+                                    int chunk = fChunk[0];
+                                    ClientTask task = new ClientTask(serverName, csStubs.get(serverName), new ArrayList<>(subOps), username, password, chunk);
+                                    fChunk[0]++;
+                                    ecs.submit(task);
+                                    ops.removeAll(subOps);
+                                } else {
+                                    remainingTasks--;
+                                }
+                            } else {
+                                oldList.add(result);
+                                resultsToValidate.replace(resChunk, oldList);
+                                // Allow some excess capacity in comparison
+                                Optional<Map.Entry<String, ComputeServerInterface>> server = csStubs.entrySet().stream()
+                                        .filter((entry) -> capacities.get(entry.getKey())*2 >= capacities.get(serverName) && !entry.getKey().equals(serverName)).findAny();
+                                if (server.isPresent()) {
+                                    Map.Entry<String, ComputeServerInterface> serverEntry = server.get();
+                                    ClientTask task = new ClientTask(serverEntry.getKey(), serverEntry.getValue(), new ArrayList<>(res.getSublist()), username, password, res.getChunk());
+                                    ecs.submit(task);
+
+                                } else {
+                                    System.out.println("Aucun serveur de calcul disponible pour la validation du calcul. Arrêt du répartiteur.");
+                                }
+
+                            }
+                        } else {
+                            // Allow some excess capacity in comparison
+                            Optional<Map.Entry<String, ComputeServerInterface>> server = csStubs.entrySet().stream()
+                                    .filter((entry) -> capacities.get(entry.getKey())*2 >= capacities.get(serverName) && !entry.getKey().equals(serverName)).findAny();
+                            if (server.isPresent()) {
+                                Map.Entry<String, ComputeServerInterface> serverEntry = server.get();
+                                ClientTask task = new ClientTask(serverEntry.getKey(), serverEntry.getValue(), new ArrayList<>(res.getSublist()), username, password, res.getChunk());
+                                ecs.submit(task);
+
+                            } else {
+                                System.out.println("Aucun serveur de calcul disponible pour la validation du calcul. Arrêt du répartiteur.");
+                                exit(1);
+                            }
+                        }
+
+
+                        break;
+                    case REFUSED:
+                        String name = res.getServerName();
+                        System.out.println(String.format("Le serveur '%s' a refusé la tâche. Renvoi.", res.getServerName()));
+                        ClientTask task = new ClientTask(name, csStubs.get(name), new ArrayList<>(res.getSublist()), username, password, res.getChunk());
+                        ecs.submit(task);
+                        break;
+                    case AUTH_FAILED:
+                        csStubs.remove(res.getServerName());
+                        resultsToValidate.remove(res.getChunk());
+                        ops.addAll(res.getSublist());
+                        System.out.println(String.format("Échec de l'authentification sur le serveur '%s'", res.getServerName()));
+                        if (csStubs.isEmpty()) {
+                            System.out.println("Aucun serveur de calcul n'est présentement disponible. Arrêt du répartiteur.");
+                            exit(1);
+                        }
+                        break;
+                    case NO_NAMESERVER:
+                        csStubs.remove(res.getServerName());
+                        resultsToValidate.remove(res.getChunk());
+                        ops.addAll(res.getSublist());
+                        System.out.println(String.format("Échec de la communication avec le serveur de noms à partir de '%s'", res.getServerName()));
+                        if (csStubs.isEmpty()) {
+                            System.out.println("Aucun serveur de noms n'est disponible. Arrêt du répartiteur.");
+                            exit(1);
+                        }
+                        break;
+                    case RMI_EXCEPTION:
+                        csStubs.remove(res.getServerName());
+                        resultsToValidate.remove(res.getChunk());
+                        ops.addAll(res.getSublist());
+                        System.out.println(String.format("Une erreur RMI est survenue sur le serveur '%s'", res.getServerName()));
+                        if (csStubs.isEmpty()) {
+                            System.out.println("Aucun serveur de calcul n'est disponible. Arrêt du répartiteur.");
+                            exit(1);
+                        }
+                        break;
+                }
+            } catch (InterruptedException | ExecutionException e) {
+                e.printStackTrace();
+            }
+        }
+        return total;
     }
 }
