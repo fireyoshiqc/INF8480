@@ -7,7 +7,6 @@ popd > /dev/null
 
 java -cp "$basepath"/nameserver.jar:"$basepath"/shared.jar \
   -Djava.rmi.server.codebase=file:"$basepath"/shared.jar \
-  -Djava.rmi.server.hostname=localhost \
   -Djava.security.policy="$basepath"/policy \
   ca.polymtl.inf8480.calculs.nameserver.NameServer $*
   

@@ -5,6 +5,7 @@ import ca.polymtl.inf8480.calculs.shared.NameServerInterface;
 import ca.polymtl.inf8480.calculs.shared.OperationPair;
 import ca.polymtl.inf8480.calculs.shared.Utils;
 
+import java.net.Inet4Address;
 import java.rmi.ConnectException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
@@ -85,6 +86,7 @@ public class ComputeServer implements ComputeServerInterface {
         }
 
         try {
+            System.setProperty("rmi.server.hostname", Inet4Address.getLocalHost().getHostName());
             ComputeServerInterface stub = (ComputeServerInterface) UnicastRemoteObject.exportObject(this, 5049);
             Registry registry = LocateRegistry.getRegistry(5050);
             registry.rebind("cs", stub);

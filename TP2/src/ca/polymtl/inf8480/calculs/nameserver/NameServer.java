@@ -5,6 +5,7 @@ import ca.polymtl.inf8480.calculs.shared.NameServerInterface;
 import ca.polymtl.inf8480.calculs.shared.Utils;
 
 import java.io.*;
+import java.net.Inet4Address;
 import java.nio.charset.StandardCharsets;
 import java.rmi.ConnectException;
 import java.rmi.NotBoundException;
@@ -134,6 +135,7 @@ public class NameServer implements NameServerInterface {
         }
 
         try {
+            System.setProperty("rmi.server.hostname", Inet4Address.getLocalHost().getHostName());
             NameServerInterface stub = (NameServerInterface) UnicastRemoteObject.exportObject(this, 5048);
             Registry registry = LocateRegistry.getRegistry(5050);
             registry.rebind("ns", stub);
