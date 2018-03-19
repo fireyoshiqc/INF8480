@@ -256,9 +256,10 @@ public class Client {
                         String serverName = res.getServerName();
                         int result = res.getResult();
                         int resChunk = res.getChunk();
-                        ArrayList<Integer> oldList = new ArrayList<>(resultsToValidate.putIfAbsent(resChunk, Arrays.asList(result)));
-                        if (!oldList.isEmpty()) {
-                            if (oldList.indexOf(result) != -1) {
+                        List<Integer> oldList = resultsToValidate.putIfAbsent(resChunk, Arrays.asList(result));
+                        if (oldList != null) {
+                            ArrayList<Integer> resList = new ArrayList<>(oldList);
+                            if (resList.indexOf(result) != -1) {
                                 resultsToValidate.remove(resChunk);
                                 total = (total + result) % 4000;
                                 if (!ops.isEmpty()) {
@@ -273,8 +274,8 @@ public class Client {
                                     remainingTasks--;
                                 }
                             } else {
-                                oldList.add(result);
-                                resultsToValidate.replace(resChunk, oldList);
+                                resList.add(result);
+                                resultsToValidate.replace(resChunk, resList);
                                 // Allow some excess capacity in comparison
                                 Optional<Map.Entry<String, ComputeServerInterface>> server = csStubs.entrySet().stream()
                                         .filter((entry) -> capacities.get(entry.getKey())*2 >= capacities.get(serverName) && !entry.getKey().equals(serverName)).findAny();
