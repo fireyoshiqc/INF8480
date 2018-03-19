@@ -281,6 +281,7 @@ public class Client {
                                 if (server.isPresent()) {
                                     Map.Entry<String, ComputeServerInterface> serverEntry = server.get();
                                     ClientTask task = new ClientTask(serverEntry.getKey(), serverEntry.getValue(), new ArrayList<>(res.getSublist()), username, password, res.getChunk());
+                                    System.out.println(String.format("Tâche #%d transférée du serveur '%s' au serveur '%s' pour validation.", res.getChunk(), serverName, serverEntry.getKey()));
                                     ecs.submit(task);
 
                                 } else {
@@ -296,7 +297,7 @@ public class Client {
                                 Map.Entry<String, ComputeServerInterface> serverEntry = server.get();
                                 ClientTask task = new ClientTask(serverEntry.getKey(), serverEntry.getValue(), new ArrayList<>(res.getSublist()), username, password, res.getChunk());
                                 ecs.submit(task);
-
+                                System.out.println(String.format("Tâche #%d transférée du serveur '%s' au serveur '%s' pour validation.", res.getChunk(), serverName, serverEntry.getKey()));
                             } else {
                                 System.out.println("Aucun serveur de calcul disponible pour la validation du calcul. Arrêt du répartiteur.");
                                 exit(1);

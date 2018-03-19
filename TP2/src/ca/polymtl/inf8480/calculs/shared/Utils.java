@@ -3,6 +3,7 @@ package ca.polymtl.inf8480.calculs.shared;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
+import java.rmi.ConnectException;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
@@ -48,9 +49,11 @@ public class Utils {
             stub = (NameServerInterface) registry.lookup("ns");
         } catch (NotBoundException e) {
             System.err.println("Erreur: Le nom '" + e.getMessage()
-                    + "' n'est pas défini dans le registre.");
+                    + "' n'est pas défini dans le registre (normal si le NameServer est démarré avant les ComputeServer).");
         } catch (RemoteException e) {
-            System.err.println("Erreur: " + e.getMessage());
+            if (!(e instanceof ConnectException)) {
+                System.err.println("Erreur: " + e.getMessage());
+            }
         }
 
         return stub;
