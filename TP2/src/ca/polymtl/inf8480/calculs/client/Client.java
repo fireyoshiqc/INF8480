@@ -9,12 +9,14 @@ import ca.polymtl.inf8480.calculs.shared.Utils;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.lang.System.exit;
@@ -28,6 +30,7 @@ public class Client {
     private String password;
     private List<OperationPair> ops;
     private int result;
+    private final Object TOTAL_LOCK = new Object();
 
     public Client(String inputFile, String username, String password) {
 
@@ -87,9 +90,79 @@ public class Client {
         }
 
         Object resultLock = new Object();
-        int[] total = {0};
-        int[] index = {ops.size()};
-        HashMap<Thread, ClientTask> tasks = new HashMap<>();
+        int total = 0;
+        //HashMap<Thread, ClientTask> tasks = new HashMap<>();
+
+        List<ClientTask> tasks = new ArrayList<>();
+        Executor ex = Executors.newCachedThreadPool();
+        ExecutorCompletionService<ClientTask.ClientTaskInfo> ecs = new ExecutorCompletionService<>(ex);
+
+        csStubs.forEach((name, stub) -> {
+            int qty = capacities.get(name);
+            List<OperationPair> subOps = ops.subList(Math.max(ops.size() - qty, 0), ops.size());
+            ClientTask task = new ClientTask(name, stub, new ArrayList<>(subOps), username, password);
+            tasks.add(task);
+            ops.removeAll(subOps);
+        });
+
+        for (ClientTask task : tasks) {
+            ecs.submit(task);
+        }
+
+        int remainingTasks = tasks.size();
+
+        while (remainingTasks > 0) {
+            try {
+                ClientTask.ClientTaskInfo res = ecs.take().get();
+                switch (res.getStatus()) {
+                    case OK:
+                        total = (total + res.getResult()) % 4000;
+                        if (!ops.isEmpty()) {
+                            String name = res.getServerName();
+                            List<OperationPair> subOps = ops.subList(Math.max(ops.size()- capacities.get(name), 0), ops.size());
+                            ClientTask task = new ClientTask(name, csStubs.get(name), new ArrayList<>(subOps), username, password);
+                            ecs.submit(task);
+                            ops.removeAll(subOps);
+                        } else {
+                            remainingTasks--;
+                        }
+                        break;
+                    case REFUSED:
+                        break;
+                    case AUTH_FAILED:
+                        break;
+                    case NO_NAMESERVER:
+                        break;
+                    case RMI_EXCEPTION:
+                        break;
+
+                }
+            } catch (InterruptedException | ExecutionException e) {
+                e.printStackTrace();
+            }
+        }
+
+
+/*
+        for (int i = 0; i < tasks.size(); i++) {
+            try {
+                ClientTask.ClientTaskInfo res = ecs.take().get();
+                if (res.getStatus() == ClientTask.TaskResult.OK) {
+                    synchronized (TOTAL_LOCK) {
+                        total += res.getResult();
+                    }
+                    if (index[0] >= 0) {
+
+                    }
+                }
+            } catch (InterruptedException | ExecutionException e) {
+                System.out.println("Problème de thread.");
+            }
+
+        }
+        */
+
+        /*
         // VERSION TRÈS SIMPLE POUR TESTER
         while (index[0] > 0) {
             csStubs.forEach((name, stub) -> {
@@ -113,8 +186,10 @@ public class Client {
                 }
             });
         }
+        */
 
-        System.out.println("Résultat total : " + total[0]);
+        System.out.println("Résultat total : " + total);
+        exit(0);
     }
 
     public static void main(String args[]) {
