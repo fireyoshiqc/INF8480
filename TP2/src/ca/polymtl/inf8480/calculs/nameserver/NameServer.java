@@ -200,9 +200,11 @@ public class NameServer implements NameServerInterface {
             stub = (ComputeServerInterface) registry.lookup("cs");
         } catch (NotBoundException e) {
             System.err.println("Erreur: Le nom '" + e.getMessage()
-                    + "' n'est pas défini dans le registre.");
+                    + "' n'est pas défini dans le registre (normal si le NameServer est démarré avant les ComputeServer).");
         } catch (RemoteException e) {
-            System.err.println("Erreur: " + e.getMessage());
+            if (!(e instanceof ConnectException)) {
+                System.err.println("Erreur: " + e.getMessage());
+            }
         }
 
         return stub;
