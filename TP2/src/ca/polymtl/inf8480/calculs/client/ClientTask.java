@@ -4,7 +4,6 @@ import ca.polymtl.inf8480.calculs.shared.ComputeServerInterface;
 import ca.polymtl.inf8480.calculs.shared.OperationPair;
 
 import java.rmi.RemoteException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
 
@@ -18,7 +17,7 @@ public class ClientTask implements Callable<ClientTask.ClientTaskInfo> {
     private int chunk;
     private ClientTaskInfo status;
 
-    public ClientTask(String name, ComputeServerInterface stub, List<OperationPair> ops, String username, String password, int chunk) {
+    ClientTask(String name, ComputeServerInterface stub, List<OperationPair> ops, String username, String password, int chunk) {
         this.name = name;
         this.stub = stub;
         this.ops = ops;
@@ -28,8 +27,9 @@ public class ClientTask implements Callable<ClientTask.ClientTaskInfo> {
     }
 
     @Override
-    public ClientTaskInfo call() throws Exception {
+    public ClientTaskInfo call() {
         try {
+            // On fait un appel RMI au serveur de calcul associé à la tâche.
             int res = stub.calculate(ops, username, password);
             if (res >= 0) {
                 status = new ClientTaskInfo(res, TaskResult.OK, ops, name, chunk);

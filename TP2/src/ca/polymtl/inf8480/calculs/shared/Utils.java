@@ -12,6 +12,7 @@ import java.util.ArrayList;
 
 public class Utils {
 
+    // Méthode permettant de scanner les hôtes (à partir d'un fichier de configuration) pour trouver un serveur de noms.
     public static NameServerInterface findNameServer() {
         for (String host : readFile(("./config/hosts.conf"))) {
             if (System.getSecurityManager() == null) {
@@ -26,7 +27,8 @@ public class Utils {
         return null;
     }
 
-    public static ArrayList<String> readFile (String filename) {
+    // Méthode utilitaire pour lire un fichier sous formes de tableau de lignes.
+    public static ArrayList<String> readFile(String filename) {
         ArrayList<String> lines = new ArrayList<>();
         try {
             BufferedReader in = new BufferedReader(new FileReader(filename));
@@ -36,11 +38,12 @@ public class Utils {
             }
             in.close();
         } catch (IOException e) {
-            System.out.println("Le fichier spécifié en entrée ("+filename+") est introuvable ou d'un mauvais format.");
+            System.out.println("Le fichier spécifié en entrée (" + filename + ") est introuvable ou d'un mauvais format.");
         }
         return lines;
     }
 
+    // Méthode permettant de charger le stub du serveur de noms dans l'appel à findNameServer.
     private static NameServerInterface loadNameServerStub(String hostname) {
         NameServerInterface stub = null;
 

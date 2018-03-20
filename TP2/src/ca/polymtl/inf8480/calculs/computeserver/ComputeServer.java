@@ -33,6 +33,7 @@ public class ComputeServer implements ComputeServerInterface {
 
     public static void main(String args[]) {
 
+        // Lecture des arguments de ligne de commande.
         ArrayList<String> arguments = new ArrayList<>(Arrays.asList(args));
         int posQ = arguments.lastIndexOf("-q");
         if (posQ == -1) {
@@ -41,11 +42,10 @@ public class ComputeServer implements ComputeServerInterface {
             exit(1);
         }
         String capacityArg = arguments.get(posQ + 1);
-        String maliciousnessArg = "";
 
         int posM = arguments.lastIndexOf("-m");
         if (posM != -1) {
-            maliciousnessArg = arguments.get(posM + 1);
+            String maliciousnessArg = arguments.get(posM + 1);
             try {
                 int capacityNum = Integer.parseInt(capacityArg);
                 float maliciousnessNum = Float.parseFloat(maliciousnessArg);
@@ -55,6 +55,8 @@ public class ComputeServer implements ComputeServerInterface {
                 if (maliciousnessNum < 0.0f || maliciousnessNum > 1.0f) {
                     throw new NumberFormatException("Le niveau de maliciosité du serveur doit être au moins 0.0, et pas plus grand que 1.0.");
                 }
+
+                // On lance le serveur de calcul avec la capacité spécifié, et une maliciosité spécifiée par la ligne de commande.
                 ComputeServer cs = new ComputeServer(capacityNum, maliciousnessNum);
                 cs.run();
             } catch (NumberFormatException e) {
@@ -68,6 +70,8 @@ public class ComputeServer implements ComputeServerInterface {
                 if (capacityNum < 1) {
                     throw new NumberFormatException("La capacité doit être plus grande que 0.");
                 }
+
+                // On lance le serveur de calcul avec la capacité spécifié, et une maliciosité nulle.
                 ComputeServer cs = new ComputeServer(capacityNum, 0.0f);
                 cs.run();
             } catch (NumberFormatException e) {
@@ -85,6 +89,7 @@ public class ComputeServer implements ComputeServerInterface {
             System.setSecurityManager(new SecurityManager());
         }
 
+        // Procédure RMI pour lancer le serveur de calcul.
         try {
             System.setProperty("rmi.server.hostname", Inet4Address.getLocalHost().getHostName());
             ComputeServerInterface stub = (ComputeServerInterface) UnicastRemoteObject.exportObject(this, 5049);
@@ -103,24 +108,32 @@ public class ComputeServer implements ComputeServerInterface {
 
     @Override
     public int calculate(List<OperationPair> ops, String username, String pwd) throws RemoteException {
+
+        // Si le serveur de noms n'existe pas (car le serveur de calcul a été lancé avant, par exemple),
+        // scanner les hôtes pour le trouver.
         if (nsStub == null) {
             nsStub = Utils.findNameServer();
         }
+
+        // S'il a été trouvé ou était déjà spécifié, procéder.
         if (nsStub != null) {
+
+            // Vérifier l'authentification du client. Si OK, procéder.
             if (nsStub.authenticateClient(username, pwd)) {
-                // Capacity refusal
-                float refusalRate = (float)(ops.size() - capacity) / (float)(5 * capacity);
+
+                // Calcul du taux de refus.
+                float refusalRate = (float) (ops.size() - capacity) / (float) (5 * capacity);
                 Random rand = new Random(System.nanoTime());
                 if (refusalRate > 0.0f && rand.nextFloat() < refusalRate) {
                     return -1;
                 }
 
-                // Malicious result
+                // Production d'un résultat malicieux aléatoire selon la valeur de maliciosité.
                 if (maliciousness > 0.0f && rand.nextFloat() < maliciousness) {
                     return rand.nextInt(4000);
                 }
 
-                // Valid result
+                // Production d'un résultat valide en passant sur la liste d'opérations.
                 int sum = 0;
                 for (OperationPair op : ops)
                     switch (op.operation.toLowerCase()) {
@@ -131,18 +144,20 @@ public class ComputeServer implements ComputeServerInterface {
                             sum = (sum + Operations.prime(op.arg)) % 4000;
                             break;
                     }
+
+                // On retourne la somme.
                 return sum;
             } else {
-                // Authentication invalid
+                // Si l'authentification est invalide.
                 return -2;
             }
         } else {
+            // S'il n'y a pas de serveur de noms.
             return -3;
         }
-
-
     }
 
+    // Retourner la capacité du serveur (par RMI).
     @Override
     public int getCapacity() throws RemoteException {
         return this.capacity;

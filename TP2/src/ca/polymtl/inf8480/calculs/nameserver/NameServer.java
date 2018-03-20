@@ -35,15 +35,18 @@ public class NameServer implements NameServerInterface {
 
     public static void main(String args[]) {
 
+        // Lire les arguments de ligne de commande.
         ArrayList<String> arguments = new ArrayList<>(Arrays.asList(args));
         int posAdd = arguments.lastIndexOf("-a");
         if (posAdd == -1) {
-            // Mode standard d'opération du nameserver
+            // Mode standard d'opération du nameserver.
             NameServer ns = new NameServer();
+
+            // Lancer le serveur et construire la liste de serveurs de calcul.
             ns.run();
             ns.buildServerList();
         } else {
-            // Mode d'ajout d'utilisateur
+            // Mode d'ajout d'utilisateur.
             int posU = arguments.lastIndexOf("-u");
             int posP = arguments.lastIndexOf("-p");
             if (posU == -1 || posP == -1 || arguments.size() < 5) {
@@ -55,7 +58,7 @@ public class NameServer implements NameServerInterface {
             String username = arguments.get(posU + 1);
             String password = arguments.get(posP + 1);
 
-            // Empêcher l'utilisation de deux options consécutives
+            // Empêcher l'utilisation de deux options consécutives.
             if (username.equals("-p") || password.equals("-u")) {
                 System.out.println("Les options -u <username> et -p <password> doivent être spécifiées lors de l'ajout d'un nouvel utilisateur.");
                 System.out.println("Usage :\n-a \t: Mode d'ajout d'utilisateur.\n-u <String>\t: Nom de l'utilisateur (obligatoire avec -a)." +
@@ -63,6 +66,7 @@ public class NameServer implements NameServerInterface {
                 exit(1);
             }
 
+            // Ajouter l'utilisateur spécifié.
             addUser(username, password);
 
         }
@@ -70,10 +74,13 @@ public class NameServer implements NameServerInterface {
 
     @SuppressWarnings("unchecked")
     private static void addUser(String username, String password) {
+
+        // Lire le fichier d'utilisateurs 'users.dat'.
         HashMap<String, UserPass> readTable = null;
         File f = new File("users.dat");
         if (f.exists()) {
             try {
+                // Si une table existe déjà, la lire.
                 ObjectInputStream ois = new ObjectInputStream(new FileInputStream(f));
                 readTable = (HashMap<String, UserPass>) ois.readObject();
                 ois.close();
@@ -83,6 +90,7 @@ public class NameServer implements NameServerInterface {
             }
         } else {
             try {
+                // S'il n'y a pas de table, la créer.
                 readTable = new HashMap<>();
                 if (!f.createNewFile()) {
                     System.out.println("Par magie noire, le fichier 'users.dat' semble déjà exister.");
@@ -94,9 +102,14 @@ public class NameServer implements NameServerInterface {
             }
         }
 
-        String salt = "" + System.nanoTime();
+        // Créer un sel de mot de passe à partir du temps système.
+        String salt = String.format("%d", System.nanoTime());
+
+        // Créer un mot de passe haché en SHA512 à partir de l'entrée en ligne de commande et du sel.
         UserPass pass = new UserPass(salt, hashSHA512(password, salt));
         readTable.put(username, pass);
+
+        // Écrire le fichier 'users.dat'.
         try {
             ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(f, false));
             oos.writeObject(readTable);
@@ -107,10 +120,11 @@ public class NameServer implements NameServerInterface {
             exit(1);
         }
 
-        System.out.println("L'utilisateur '" + username + "' a été sauvegardé pour lui donner accès au NameServer.\n" +
-                "Il peut dorénavant se servir des serveurs de calcul en utilisant son username et mot de passe (voir usage du client).");
+        System.out.printf("L'utilisateur '%s' a été sauvegardé pour lui donner accès au NameServer.\n" +
+                "Il peut dorénavant se servir des serveurs de calcul en utilisant son username et mot de passe (voir usage du client).%n", username);
     }
 
+    // Fonction de hachage SHA512 pour les mots de passe.
     private static String hashSHA512(String toHash, String salt) {
         String hashed = null;
         try {
@@ -134,6 +148,7 @@ public class NameServer implements NameServerInterface {
             System.setSecurityManager(new SecurityManager());
         }
 
+        // Procédure RMI pour lancer le serveur de noms.
         try {
             System.setProperty("rmi.server.hostname", Inet4Address.getLocalHost().getHostName());
             NameServerInterface stub = (NameServerInterface) UnicastRemoteObject.exportObject(this, 5048);
@@ -147,6 +162,7 @@ public class NameServer implements NameServerInterface {
             System.err.println("Erreur: " + e.getMessage());
         }
 
+        // Lire le fichier d'utilisateurs pour l'authentification.
         File f = new File("users.dat");
         if (f.exists()) {
             try {
@@ -164,11 +180,13 @@ public class NameServer implements NameServerInterface {
         }
     }
 
+    // Méthode RMI pouvant être appelée par le client pour récupérer la liste des serveurs de calcul.
     public HashMap<String, ComputeServerInterface> getServers() throws RemoteException {
         this.buildServerList();
         return info;
     }
 
+    // Méthode RMI pouvant être appelée par le serveur de calcul pour authentifier un client.
     public boolean authenticateClient(String username, String pwd) throws RemoteException {
         synchronized (USERSLOCK) {
             UserPass savedPwd = this.users.get(username);
@@ -176,6 +194,7 @@ public class NameServer implements NameServerInterface {
         }
     }
 
+    // On construit la liste des serveurs de calcul disponibles à partir d'un fichier de configuration.
     private void buildServerList() {
         synchronized (SERVERLISTLOCK) {
             info = new HashMap<>();
@@ -183,6 +202,8 @@ public class NameServer implements NameServerInterface {
                 if (System.getSecurityManager() == null) {
                     System.setSecurityManager(new SecurityManager());
                 }
+
+                // Ajout du stub d'un serveur de calcul disponible à la table des serveurs.
                 ComputeServerInterface distantServerStub = loadServerStub(host);
                 if (distantServerStub != null) {
                     System.out.println("Found ComputeServer on host : " + host);
@@ -192,6 +213,7 @@ public class NameServer implements NameServerInterface {
         }
     }
 
+    // Procédure RMI pour charger le stub d'un serveur de calcul.
     private ComputeServerInterface loadServerStub(String hostname) {
         ComputeServerInterface stub = null;
 
@@ -200,7 +222,7 @@ public class NameServer implements NameServerInterface {
             stub = (ComputeServerInterface) registry.lookup("cs");
         } catch (NotBoundException e) {
             System.err.println("Erreur: Le nom '" + e.getMessage()
-                    + "' n'est pas défini dans le registre (normal si le NameServer est démarré avant les ComputeServer).");
+                    + "' n'est pas défini dans le registre (normal si le NameServer est démarré avant les ComputeServer ou vice-versa).");
         } catch (RemoteException e) {
             if (!(e instanceof ConnectException)) {
                 System.err.println("Erreur: " + e.getMessage());
