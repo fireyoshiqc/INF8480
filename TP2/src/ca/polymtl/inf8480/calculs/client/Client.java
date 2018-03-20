@@ -341,22 +341,29 @@ public class Client {
                                 resList.add(result);
                                 resultsToValidate.replace(resChunk, resList);
 
-                                // Trouver un serveur pouvant accueillir le chunk de calculs. On peut accorder le calcul
+                                // Trouver un serveur pouvant accueillir le chunk de calculs (idéalement, le suivant en
+                                // ordre lexicographique). On peut accorder le calcul
                                 // à un serveur ayant jusqu'à la moitié de la capacité du serveur original, au besoin.
                                 // Dans nos expériences, cela n'arrive pas.
-                                Optional<Map.Entry<String, ComputeServerInterface>> server = csStubs.entrySet().stream()
-                                        .filter((entry) -> capacities.get(entry.getKey()) * 2 >= capacities.get(serverName) && !entry.getKey().equals(serverName)).findAny();
-
-                                // Si on trouve un serveur pour la validation, procéder en lui envoyant la même tâche
-                                // qu'au serveur original.
-                                if (server.isPresent()) {
-                                    Map.Entry<String, ComputeServerInterface> serverEntry = server.get();
-                                    ClientTask task = new ClientTask(serverEntry.getKey(), serverEntry.getValue(), new ArrayList<>(res.getSublist()), username, password, res.getChunk());
-                                    System.out.println(String.format("Tâche #%d transférée du serveur '%s' au serveur '%s' pour validation.", res.getChunk(), serverName, serverEntry.getKey()));
-                                    ecs.submit(task);
-
-                                // Sinon, arrêter le répartiteur car on a une configuration invalide pour l'utilisation
-                                // en mode non-sécurisé.
+                                ArrayList<String> serverNames = new ArrayList<>(csStubs.keySet());
+                                serverNames.sort(String::compareToIgnoreCase);
+                                int idx = serverNames.indexOf(serverName);
+                                if (idx != -1) {
+                                    boolean found = false;
+                                    for (int i = 1; i < serverNames.size(); i++) {
+                                        String name = serverNames.get((idx+i)%serverNames.size());
+                                        if (capacities.get(name) * 2 >= capacities.get(serverName)) {
+                                            ClientTask task = new ClientTask(name, csStubs.get(name), new ArrayList<>(res.getSublist()), username, password, res.getChunk());
+                                            System.out.println(String.format("Tâche #%d transférée du serveur '%s' au serveur '%s' pour validation.", res.getChunk(), serverName, name));
+                                            ecs.submit(task);
+                                            found = true;
+                                            break;
+                                        }
+                                    }
+                                    if (!found) {
+                                        System.out.println("Aucun serveur de calcul disponible pour la validation du calcul. Arrêt du répartiteur.");
+                                        exit(1);
+                                    }
                                 } else {
                                     System.out.println("Aucun serveur de calcul disponible pour la validation du calcul. Arrêt du répartiteur.");
                                     exit(1);
@@ -365,13 +372,25 @@ public class Client {
                             }
                         } else {
                             // On fait la même chose si jamais le chunk n'a jamais été traité auparavant.
-                            Optional<Map.Entry<String, ComputeServerInterface>> server = csStubs.entrySet().stream()
-                                    .filter((entry) -> capacities.get(entry.getKey()) * 2 >= capacities.get(serverName) && !entry.getKey().equals(serverName)).findAny();
-                            if (server.isPresent()) {
-                                Map.Entry<String, ComputeServerInterface> serverEntry = server.get();
-                                ClientTask task = new ClientTask(serverEntry.getKey(), serverEntry.getValue(), new ArrayList<>(res.getSublist()), username, password, res.getChunk());
-                                ecs.submit(task);
-                                System.out.println(String.format("Tâche #%d transférée du serveur '%s' au serveur '%s' pour validation.", res.getChunk(), serverName, serverEntry.getKey()));
+                            ArrayList<String> serverNames = new ArrayList<>(csStubs.keySet());
+                            serverNames.sort(String::compareToIgnoreCase);
+                            int idx = serverNames.indexOf(serverName);
+                            if (idx != -1) {
+                                boolean found = false;
+                                for (int i = 1; i < serverNames.size(); i++) {
+                                    String name = serverNames.get((idx+i)%serverNames.size());
+                                    if (capacities.get(name) * 2 >= capacities.get(serverName)) {
+                                        ClientTask task = new ClientTask(name, csStubs.get(name), new ArrayList<>(res.getSublist()), username, password, res.getChunk());
+                                        System.out.println(String.format("Tâche #%d transférée du serveur '%s' au serveur '%s' pour validation.", res.getChunk(), serverName, name));
+                                        ecs.submit(task);
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                                if (!found) {
+                                    System.out.println("Aucun serveur de calcul disponible pour la validation du calcul. Arrêt du répartiteur.");
+                                    exit(1);
+                                }
                             } else {
                                 System.out.println("Aucun serveur de calcul disponible pour la validation du calcul. Arrêt du répartiteur.");
                                 exit(1);
