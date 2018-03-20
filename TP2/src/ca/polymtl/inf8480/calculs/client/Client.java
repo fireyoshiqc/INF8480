@@ -157,7 +157,7 @@ public class Client {
         // Pour chaque serveur disponible, lancer une tâche de calcul correspondant à 2 fois sa capacité.
         // Cela équivaut à ~15-20% de taux de refus en moyenne.
         csStubs.forEach((name, stub) -> {
-            int qty = capacities.get(name) * 2;
+            int qty = (int)(capacities.get(name) * 2);
 
             // Prendre les 'qty' derniers éléments de la liste d'opérations.
             List<OperationPair> subOps = ops.subList(Math.max(ops.size() - qty, 0), ops.size());
@@ -195,7 +195,7 @@ public class Client {
                         // S'il reste des calculs à faire, lancer une nouvelle tâche sur le serveur dorénavant disponible.
                         if (!ops.isEmpty()) {
                             String name = res.getServerName();
-                            int qty = capacities.get(name) * 2;
+                            int qty = (int)(capacities.get(name) * 2);
                             List<OperationPair> subOps = ops.subList(Math.max(ops.size() - qty, 0), ops.size());
                             ClientTask task = new ClientTask(name, csStubs.get(name), new ArrayList<>(subOps), username, password, -1);
                             ecs.submit(task);
@@ -275,7 +275,7 @@ public class Client {
         ExecutorCompletionService<ClientTask.ClientTaskInfo> ecs = new ExecutorCompletionService<>(ex);
 
         csStubs.forEach((name, stub) -> {
-            int qty = capacities.get(name) * 2;
+            int qty = (int)(capacities.get(name) * 2);
             List<OperationPair> subOps = ops.subList(Math.max(ops.size() - qty, 0), ops.size());
 
             // Petite différence ici, chaque calcul est associé à un identifiant de 'chunk', qui indique quel morceau
@@ -324,7 +324,7 @@ public class Client {
                                 // identifiant de chunk, et on enlève les calculs alloués de la liste d'opérations
                                 // restantes.
                                 if (!ops.isEmpty()) {
-                                    int qty = capacities.get(serverName) * 2;
+                                    int qty = (int)(capacities.get(serverName) * 2);
                                     List<OperationPair> subOps = ops.subList(Math.max(ops.size() - qty, 0), ops.size());
                                     int chunk = fChunk[0];
                                     ClientTask task = new ClientTask(serverName, csStubs.get(serverName), new ArrayList<>(subOps), username, password, chunk);

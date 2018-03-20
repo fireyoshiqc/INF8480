@@ -27,7 +27,7 @@ public class ClientTask implements Callable<ClientTask.ClientTaskInfo> {
     }
 
     @Override
-    public ClientTaskInfo call() {
+    public ClientTaskInfo call() throws Exception {
         try {
             // On fait un appel RMI au serveur de calcul associé à la tâche.
             int res = stub.calculate(ops, username, password);
@@ -39,6 +39,8 @@ public class ClientTask implements Callable<ClientTask.ClientTaskInfo> {
                 status = new ClientTaskInfo(res, TaskResult.AUTH_FAILED, ops, name, chunk);
             } else if (res == -3) {
                 status = new ClientTaskInfo(res, TaskResult.NO_NAMESERVER, ops, name, chunk);
+            } else {
+                status = new ClientTaskInfo(res, TaskResult.RMI_EXCEPTION, ops, name, chunk);
             }
 
         } catch (RemoteException e) {
