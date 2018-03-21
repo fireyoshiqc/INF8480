@@ -1,0 +1,126 @@
+heat_template_version: 2014-10-16
+
+description: A template to deploy a load balanced web server
+
+parameters:
+  key_name:
+    type: string
+    description: Keypair utilisee par les serveurs
+    default: TP3-Typhoon
+    constraints:
+      - custom_constraint: nova.keypair
+  flavor:
+    type: string
+    description: lavor utilisee par les serveurs
+    default: INF4410-mini
+    constraints:
+      - custom_constraint: nova.flavor
+  image:
+    type: string
+    description: Image utilisee pour les serveurs
+    default: INF4410-Ubuntu-trusty-mini
+    constraints:
+      - custom_constraint: glance.image
+  net_id:
+    type: string
+    description: Network
+    default: inf4410-net
+    constraints:
+      - custom_constraint: neutron.network
+  external_network_id:
+    type: string
+    description: Reseau utilise pour le load balancer
+    default: 0c3b1354-d3d5-4fec-86d3-19d4d1f13785
+  subnet_id:
+    type: string
+    description: Sous-reseau dans lequel le load balancer sera situe
+    default: 6579eb07-88c3-4707-9c6e-ab90a78cca02
+
+resources:
+  #server_nodes:
+   # type: OS::Heat::ResourceGroup
+    #properties:
+    #  count: 2
+     # resource_def:
+        
+          
+          #A completer
+
+  server1:
+    type: OS::Nova::Server
+    properties:
+      key_name: { get_param: key_name }
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      networks:
+        - network: { get_param: net_id }
+      user_data_format: RAW
+      user_data: |
+        #!/bin/bash
+        wget https://raw.githubusercontent.com/houssemmh/INF4410-TP3/master/server.py
+        python server.py
+  poolmember1:
+    type: OS::Neutron::PoolMember
+    properties:
+      pool_id: { get_resource: mypool }
+      address: { get_attr: [server1, first_address]}
+      protocol_port: 8000
+
+  server2:
+    type: OS::Nova::Server
+    properties:
+      key_name: { get_param: key_name }
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      networks:
+        - network: { get_param: net_id }
+      user_data_format: RAW
+      user_data: |
+        #!/bin/bash
+        wget https://raw.githubusercontent.com/houssemmh/INF4410-TP3/master/server.py
+        python server.py
+  poolmember2:
+    type: OS::Neutron::PoolMember
+    properties:
+      pool_id: { get_resource: mypool }
+      address: { get_attr: [server2, first_address]}
+      protocol_port: 8000
+  
+  mypool:
+    type: OS::Neutron::Pool
+    properties:
+      protocol: HTTP
+      monitors: [{ get_resource: monitor }]
+      subnet_id: { get_param: subnet_id }
+      lb_method: ROUND_ROBIN
+      vip:
+        protocol_port: 80
+      #A completer
+
+  loadbalancer:
+    type: OS::Neutron::LoadBalancer
+    properties:
+      protocol_port: 80
+      pool_id: { get_resource: mypool }
+      #A completer
+
+  monitor:
+    type: OS::Neutron::HealthMonitor
+    properties:
+      type: TCP
+      delay: 10000
+      max_retries: 2
+      timeout: 4000
+      #A completer
+  
+  lb_floating:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network_id: { get_param: external_network_id }
+      port_id: { get_attr: [mypool, vip, port_id] }
+
+
+outputs:
+  pool_ip_address:
+    value: {get_attr: [mypool, vip, address]}
+    description: The IP address of the load balancing pool
