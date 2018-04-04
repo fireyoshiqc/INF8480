@@ -37,55 +37,25 @@ parameters:
     default: 6579eb07-88c3-4707-9c6e-ab90a78cca02
 
 resources:
-  #server_nodes:
-   # type: OS::Heat::ResourceGroup
-    #properties:
-    #  count: 2
-     # resource_def:
-        
-          
-          #A completer
+  server_nodes:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: 2
+      resource_def:
+        type: OS::Nova::Server
+        properties:
+          name: TP3-server-%index%
+          key_name: { get_param: key_name }
+          image: { get_param: image }
+          flavor: { get_param: flavor }
+          networks:
+            - network: { get_param: net_id }
+          user_data_format: RAW
+          user_data: |
+            #!/bin/bash
+            wget https://raw.githubusercontent.com/houssemmh/INF4410-TP3/master/server.py
+            python server.py
 
-  server1:
-    type: OS::Nova::Server
-    properties:
-      key_name: { get_param: key_name }
-      image: { get_param: image }
-      flavor: { get_param: flavor }
-      networks:
-        - network: { get_param: net_id }
-      user_data_format: RAW
-      user_data: |
-        #!/bin/bash
-        wget https://raw.githubusercontent.com/houssemmh/INF4410-TP3/master/server.py
-        python server.py
-  poolmember1:
-    type: OS::Neutron::PoolMember
-    properties:
-      pool_id: { get_resource: mypool }
-      address: { get_attr: [server1, first_address]}
-      protocol_port: 8000
-
-  server2:
-    type: OS::Nova::Server
-    properties:
-      key_name: { get_param: key_name }
-      image: { get_param: image }
-      flavor: { get_param: flavor }
-      networks:
-        - network: { get_param: net_id }
-      user_data_format: RAW
-      user_data: |
-        #!/bin/bash
-        wget https://raw.githubusercontent.com/houssemmh/INF4410-TP3/master/server.py
-        python server.py
-  poolmember2:
-    type: OS::Neutron::PoolMember
-    properties:
-      pool_id: { get_resource: mypool }
-      address: { get_attr: [server2, first_address]}
-      protocol_port: 8000
-  
   mypool:
     type: OS::Neutron::Pool
     properties:
@@ -94,13 +64,14 @@ resources:
       subnet_id: { get_param: subnet_id }
       lb_method: ROUND_ROBIN
       vip:
-        protocol_port: 80
+        protocol_port: 8000
       #A completer
 
   loadbalancer:
     type: OS::Neutron::LoadBalancer
     properties:
-      protocol_port: 80
+      protocol_port: 8000
+      members: { get_attr: [server_nodes, refs] }
       pool_id: { get_resource: mypool }
       #A completer
 
@@ -108,9 +79,9 @@ resources:
     type: OS::Neutron::HealthMonitor
     properties:
       type: TCP
-      delay: 10000
+      delay: 10
       max_retries: 2
-      timeout: 4000
+      timeout: 4
       #A completer
   
   lb_floating:
@@ -123,4 +94,4 @@ resources:
 outputs:
   pool_ip_address:
     value: {get_attr: [mypool, vip, address]}
-    description: The IP address of the load balancing pool
+    description: The internal IP address of the load balancing pool
